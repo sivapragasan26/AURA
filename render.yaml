@@ -3,6 +3,11 @@
 # AURA_API_TOKEN and AURA_ALLOWED_ORIGINS are NOT set here on purpose — set them in the Render
 # dashboard so they stay out of the repository. AURA_ALLOWED_HOSTS must name this service's own
 # hostname: the Host check is what stops a web page from driving the API, so it is never left open.
+#
+# ONE INSTANCE. A scan is two requests — prepare, then complete, with the browser's model call in
+# between — and the prepared evidence waits in that process's memory (aura/api/relay.py). A second
+# instance would answer complete without it and the scan would have to start over. Scaling out means
+# giving the pending scans somewhere shared to live first.
 services:
   - type: web
     name: aura-api
@@ -10,6 +15,7 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /api/health
+    numInstances: 1
     envVars:
       - key: AURA_PERSIST
         value: "0"

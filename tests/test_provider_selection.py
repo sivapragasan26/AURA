@@ -1,6 +1,6 @@
 """
-Provider selection: the extension picks the provider, the key stays on the local server, and AURA never
-silently falls back to Mock AI.
+Provider selection: the extension picks the provider and model, the server never receives anyone's API key
+(the browser calls the provider directly with it), and AURA never silently falls back to Mock AI.
 """
 import json
 
@@ -55,22 +55,41 @@ def test_unknown_provider_is_refused(client):
     assert r.status_code == 400 and r.json()["error"]["code"] == "UNKNOWN_PROVIDER"
 
 
-def test_api_key_is_accepted_but_never_returned_or_logged(client, caplog):
+def test_the_server_refuses_an_api_key(client, caplog):
+    """
+    The server does not take anyone's API key: the browser calls the provider directly with it.
+
+    A client that sends one is told so plainly rather than having it silently ignored, and the key must not
+    appear in the answer, in any later answer, or in the log.
+    """
     r = client.post("/api/providers/select", headers=auth(), json={"provider": "groq", "api_key": SECRET})
-    body = json.dumps(r.json())
-    assert SECRET not in body
-    assert SECRET not in json.dumps(client.get("/api/providers", headers=auth()).json())
-    assert SECRET not in json.dumps(client.get("/api/health", headers=auth()).json())
+    assert r.status_code == 400 and r.json()["error"]["code"] == "KEY_NOT_ACCEPTED"
+    assert "api key" in r.json()["error"]["message"].lower()
+    for later in (r, client.get("/api/providers", headers=auth()), client.get("/api/health", headers=auth())):
+        assert SECRET not in json.dumps(later.json())
     assert SECRET not in caplog.text
-    groq = next(p for p in client.get("/api/providers", headers=auth()).json()["providers"] if p["provider"] == "groq")
-    assert groq["key_configured"] is True and groq["key_source"] == "Dashboard Session"
+    # A refused request changes nothing, including the selection it came with.
+    assert client.get("/api/providers", headers=auth()).json()["selected"] == "mock"
 
 
-def test_empty_key_clears_the_stored_key(client):
-    client.post("/api/providers/select", headers=auth(), json={"provider": "groq", "api_key": SECRET})
-    client.post("/api/providers/select", headers=auth(), json={"provider": "groq", "api_key": ""})
-    groq = next(p for p in client.get("/api/providers", headers=auth()).json()["providers"] if p["provider"] == "groq")
-    assert groq["key_configured"] is False
+def test_no_user_key_can_be_held_by_the_server(client):
+    """There is nowhere in the provider configuration for a user's key to live."""
+    config = ProviderConfig()
+    config.set("groq", "llama-x")
+    held = json.dumps(vars(config), default=str)
+    assert SECRET not in held
+    assert not hasattr(config, "_keys") and not hasattr(config, "session_state")
+    with pytest.raises(TypeError):
+        config.set("groq", "llama-x", SECRET)  # the parameter does not exist any more
+    # What it does still report is whether THIS SERVER has a key of its own, without revealing it.
+    described = {p["provider"]: p for p in config.describe()}
+    assert described["groq"]["key_configured"] in (True, False)
+    assert SECRET not in json.dumps(config.describe())
+
+
+def test_choosing_a_provider_needs_no_key(client):
+    r = client.post("/api/providers/select", headers=auth(), json={"provider": "groq", "model": "llama-x"})
+    assert r.status_code == 200 and r.json()["selected"] == "groq" and r.json()["model"] == "llama-x"
 
 
 def test_test_connection_reports_states_without_an_inference(client):

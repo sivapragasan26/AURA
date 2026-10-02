@@ -4,7 +4,7 @@ import json
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable, List
+from typing import Dict, Any, Optional, Callable, List, Tuple
 from aura.config import settings
 from aura.agents.browser_agent import BrowserAgent
 from aura.analyzers.dom_analyzer import DOMAnalyzer
@@ -23,6 +23,7 @@ from aura.evaluation.evaluator import EvaluationEngine
 from aura.utils.logger import logger, ExecutionStepTracker
 from aura.utils.helpers import validate_url
 from aura.agent.diagnostics import AIDiagnostics, AIAnalysisStatus
+from aura.agent.evidence_packet import build_evidence_packet
 from aura.agent.provider_status import run_preflight, ProviderPreflightBlocked
 
 PNG_SIGNATURE = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
@@ -38,6 +39,49 @@ def _png_size(path):
             return {"width": img.width, "height": img.height}
     except Exception:
         return None
+
+
+def bundle_inputs(bundle: Any) -> Tuple[Dict[str, Any], List[Any], List[Dict[str, Any]]]:
+    """The DOM summary, accessibility violations and interaction records an evidence bundle carries."""
+    dom_summary = DOMAnalyzer().summarize(bundle.dom.model_dump())
+    a11y_violations = AccessibilityAnalyzer.convert_raw_violations(
+        [v.model_dump() for v in bundle.axe.violations]) if bundle.axe.available else []
+    interaction_log = [i.model_dump() for i in bundle.interactions]
+    return dom_summary, a11y_violations, interaction_log
+
+
+def bundle_telemetry(bundle: Any, screenshot_path: Optional[str] = None) -> RuntimeTelemetry:
+    """The runtime telemetry an evidence bundle carries."""
+    return RuntimeTelemetry(
+        url=bundle.url, title=bundle.title,
+        viewport={"width": bundle.viewport.width, "height": bundle.viewport.height},
+        page_load_time_ms=bundle.telemetry.page_load_time_ms,
+        console_errors=[ConsoleError(type=c.type, text=c.text, location=c.location, triggered_by=c.triggered_by)
+                        for c in bundle.telemetry.console],
+        network_failures=[NetworkFailure(url=n.url, status=n.status, status_text=n.status_text, method=n.method)
+                          for n in bundle.telemetry.network],
+        screenshot_path=screenshot_path,
+    )
+
+
+def build_ai_prompt(bundle: Any, screenshot_attached: bool = False) -> Any:
+    """
+    The evidence packet - and so the exact prompt - for one bundle, without running the analysis.
+
+    This is the first half of a scan whose model call happens in the browser (aura/api/relay.py): the
+    browser is handed this prompt, calls the provider itself, and returns the response for the second half.
+    It builds on the same bundle_inputs() the one-shot path uses, so the two cannot drift apart.
+    """
+    if not validate_url(bundle.url):
+        raise ValueError("Invalid or unsafe URL in evidence bundle.")
+    dom_summary, a11y_violations, interaction_log = bundle_inputs(bundle)
+    return build_evidence_packet(
+        telemetry=bundle_telemetry(bundle),
+        dom_summary=dom_summary,
+        accessibility_violations=a11y_violations,
+        interaction_log=interaction_log,
+        screenshot_in_browser=bool(screenshot_attached),
+    )
 
 
 class AURAOrchestrator:
@@ -232,7 +276,7 @@ class AURAOrchestrator:
         finally:
             self.browser_agent.stop()
 
-    def analyze_evidence(self, bundle: Any, skip_ai: bool = False) -> Dict[str, Any]:
+    def analyze_evidence(self, bundle: Any, skip_ai: bool = False, audit_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Runs the AURA analysis pipeline on evidence collected in the user's own browser tab by the extension
         (aura.evidence.bundle.EvidenceBundle). Same pipeline as run_audit, minus the steps that need a page
@@ -245,13 +289,17 @@ class AURAOrchestrator:
         url = bundle.url
         if not validate_url(url):
             raise ValueError("Invalid or unsafe URL in evidence bundle.")
-        audit_id = self.generate_audit_id()
+        # The id may be given: a two-phase scan hands it to the browser before the model answers, so the
+        # audit that comes back carries the same id the browser was told to complete.
+        audit_id = audit_id or self.generate_audit_id()
         viewport = {"width": bundle.viewport.width, "height": bundle.viewport.height}
         start_time = time.time()
 
         preflight_result = None
         ai_skip_reason = "AI analysis was not run (deterministic-only scan requested)." if skip_ai else None
-        if not skip_ai:
+        # A relayed call has already been made, in the browser, with the user's own key: there is nothing
+        # left to preflight and this process holds no credential to preflight with.
+        if not skip_ai and not getattr(self.provider, "is_browser_relay", False):
             self.step_tracker.add_step(f"AI provider preflight ({getattr(self.provider, 'provider_key', 'unknown')})", "running")
             preflight_result = run_preflight(self.provider)
             if preflight_result.blocked:
@@ -262,10 +310,7 @@ class AURAOrchestrator:
                 self.step_tracker.update_last_step("completed", f"{preflight_result.status}")
 
         self.step_tracker.add_step(f"[{audit_id}] Processing evidence collected by the AURA extension", "running")
-        dom_summary = DOMAnalyzer().summarize(bundle.dom.model_dump())
-        a11y_violations = AccessibilityAnalyzer.convert_raw_violations(
-            [v.model_dump() for v in bundle.axe.violations]) if bundle.axe.available else []
-        interaction_log = [i.model_dump() for i in bundle.interactions]
+        dom_summary, a11y_violations, interaction_log = bundle_inputs(bundle)
 
         def _write_png(b64: Optional[str], suffix: str) -> Optional[str]:
             if not b64:
@@ -290,15 +335,7 @@ class AURAOrchestrator:
         screenshot_path = _write_png(bundle.screenshot_png_base64, "")
         keep_path = _write_png(bundle.screenshot_fullpage_png_base64, "_fullpage") or screenshot_path
 
-        telemetry = RuntimeTelemetry(
-            url=url, title=bundle.title, viewport=viewport,
-            page_load_time_ms=bundle.telemetry.page_load_time_ms,
-            console_errors=[ConsoleError(type=c.type, text=c.text, location=c.location, triggered_by=c.triggered_by)
-                            for c in bundle.telemetry.console],
-            network_failures=[NetworkFailure(url=n.url, status=n.status, status_text=n.status_text, method=n.method)
-                              for n in bundle.telemetry.network],
-            screenshot_path=screenshot_path,
-        )
+        telemetry = bundle_telemetry(bundle, screenshot_path)
         self.step_tracker.update_last_step(
             "completed", f"DOM {dom_summary.get('total_elements', 0)} elements | axe {'ran' if bundle.axe.available else 'unavailable'} | "
                          f"{len(interaction_log)} interaction records | screenshot {'yes' if screenshot_path else 'no'}")
@@ -313,7 +350,9 @@ class AURAOrchestrator:
                 fallback_context=None, live_agent=None, enable_targeted_interactions=False,
                 ai_skip_reason=ai_skip_reason,
                 collection={
-                    "capture_size": _png_size(keep_path),
+                    # The pixel size of the capture, so a finding outside it is not offered a screenshot.
+                    # When the capture stayed in the browser it reports the size instead.
+                    "capture_size": _png_size(keep_path) or (bundle.capture_size.model_dump() if bundle.capture_size else None),
                     "target_boxes": dict(bundle.target_boxes or {}),
                     "source": bundle.source, "collector_version": bundle.collector_version,
                     "captured_at": bundle.captured_at, "title": bundle.title,
@@ -370,7 +409,8 @@ class AURAOrchestrator:
         self.step_tracker.update_last_step("completed", f"Telemetry analyzed ({len(classified_events)} events)")
 
         # 6. UX/UI Agent Candidate Findings (focused evidence packet)
-        provider_name = self.ux_ui_agent.agent.provider.__class__.__name__.replace("Provider", "")
+        _ai_provider = self.ux_ui_agent.agent.provider
+        provider_name = getattr(_ai_provider, "display_name", None) or _ai_provider.__class__.__name__.replace("Provider", "")
         is_mock_mode = ("mock" in provider_name.lower())
 
         if skip_ai:

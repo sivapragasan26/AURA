@@ -1,6 +1,8 @@
 // AURA side panel controller.
 // All text coming from pages or AI output is rendered with textContent (never innerHTML).
-import { api, ApiError, findingShot } from "./api.js";
+import { api, ApiError, getAiChoice, setAiChoice, getProviderKey, setProviderKey, getSettings } from "./api.js";
+import { PROVIDERS, callsProviderInBrowser, checkProviderKey } from "./providers.js";
+import { cropFinding, NoShot } from "./shot.js";
 import { scanCurrentPage, getActiveTab, ensureAgent, ScanError } from "./scanner.js";
 import { agentHighlight, agentClearHighlight, clearPageOverlays } from "./page_functions.js";
 
@@ -63,7 +65,12 @@ function pageUnavailable(action, e) {
 connectPort();
 
 const state = { view: null, tabId: null, filter: null, selected: null, stale: false, health: null, scanning: false,
-                access: { tabId: null, state: "PENDING" } };
+                access: { tabId: null, state: "PENDING" },
+                // The scan's capture, held in memory for this panel only: it is never uploaded and never
+                // written anywhere. Closing the panel or scanning again replaces it.
+                capture: null,
+                // Which AI provider and model this browser will call, and whether a key is saved for it.
+                ai: { provider: "mock", model: "", hasKey: false } };
 
 // ------------------------------------------------------------------ audit ownership (tab + document)
 // An audit belongs to the tab it was scanned in AND to the document that tab showed. Chrome gives every
@@ -72,7 +79,7 @@ const state = { view: null, tabId: null, filter: null, selected: null, stale: fa
 // panel never shows one tab's results for another tab, and never keeps a stale "another tab" message.
 // Only references are stored (audit id, document id, page origin+path), in chrome.storage.session: they
 // survive panel close/reopen and service-worker restarts, and are cleared when the extension reloads.
-// The findings themselves are re-fetched from the local AURA server.
+// The findings themselves are re-fetched from the AURA service.
 const AUDITS_KEY = "aura.panelAudits";
 const audits = new Map(); // tabId -> { auditId, documentId, pageKey, view }
 
@@ -132,36 +139,69 @@ function h(tag, attrs = {}, ...children) {
 const show = (id, on = true) => $(id).classList.toggle("hidden", !on);
 
 // ------------------------------------------------------------------ server / page status
+// Which AI this browser will use for the next scan. The choice and the key live in this extension; the
+// AURA service is never told either, so this is read from storage and not from the server.
+async function refreshAiChoice() {
+  const choice = await getAiChoice();
+  const inBrowser = callsProviderInBrowser(choice.provider);
+  state.ai = {
+    provider: choice.provider,
+    model: choice.model,
+    label: inBrowser ? PROVIDERS[choice.provider].label : "Mock AI · Demo",
+    isMock: !inBrowser,
+    hasKey: inBrowser ? !!(await getProviderKey(choice.provider)) : true,
+  };
+  return state.ai;
+}
+
 async function refreshHealth() {
   const pill = $("conn");
+  const ai = await refreshAiChoice();
+  const { backendUrl } = await getSettings();
+  const local = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])/i.test(backendUrl);
   try {
     const hl = await api.health();
     state.health = hl;
-    const label = hl.ai.label || hl.ai.provider;
     if (!hl.paired) {
       pill.className = "pill pill-warn"; pill.textContent = "Not paired";
-      pill.title = "Open Settings and paste the pairing token printed by the AURA server.";
-    } else if (hl.ai.blocked || (!hl.ai.key_configured && !hl.ai.is_mock)) {
+      pill.title = local ? "Open Settings and paste the pairing token printed by the AURA server."
+                         : "AURA could not register this install. Try again in a moment.";
+    } else if (!ai.hasKey) {
       pill.className = "pill pill-warn";
-      pill.textContent = hl.ai.key_configured ? `${label} · ${hl.ai.preflight_status}` : `${label} · no key`;
-      pill.title = hl.ai.preflight_reason || "This provider has no API key on the AURA server.";
+      pill.textContent = `${ai.label} · no key`;
+      pill.title = `Add your ${ai.label} API key in the AI provider panel. It stays in this browser and is `
+        + "sent only to that provider.";
     } else {
-      pill.className = "pill pill-ok"; pill.textContent = `Connected · ${label}`;
-      pill.title = hl.ai.is_mock
+      pill.className = "pill pill-ok"; pill.textContent = `Connected · ${ai.label}`;
+      pill.title = ai.isMock
         ? "Mock AI is built in: scripted findings for demos and tests, not real model analysis."
-        : `Each AI scan uses ${hl.ai.requests_per_scan} request of ${label}${hl.ai.model ? " / " + hl.ai.model : ""}.`;
+        : `Each AI scan makes one request to ${ai.label}${ai.model ? " / " + ai.model : ""}, from this `
+          + "browser, with your key.";
     }
-    $("ai-provider").textContent = hl.ai.is_mock ? label : `${label}${hl.ai.model ? " · " + hl.ai.model : ""}`;
-    $("ai-provider").title = hl.ai.preflight_reason || "";
-    const target = hl.ai.is_mock ? "the built-in Mock provider (nothing leaves your machine)" : `${label}, the provider you selected`;
-    $("privacy").textContent = `Evidence from this page (structure, visible text snippets, one screenshot) is sent to your local AURA server. With AI on, a focused evidence packet is sent to ${target}.`;
-    $("ask-cost").textContent = hl.ai.is_mock ? "needs a real AI provider" : "1 AI request per question";
+    $("ai-provider").textContent = ai.isMock ? ai.label : `${ai.label}${ai.model ? " · " + ai.model : ""}`;
+    $("ai-provider").title = ai.hasKey ? "" : "No API key saved for this provider.";
+    $("privacy").textContent = privacyLine(ai, backendUrl, local);
+    $("ask-cost").textContent = ai.isMock ? "needs a real AI provider" : "1 AI request per question";
   } catch (e) {
     state.health = null;
-    pill.className = "pill pill-err"; pill.textContent = "Server offline";
+    pill.className = "pill pill-err"; pill.textContent = local ? "Server offline" : "AURA service unreachable";
     pill.title = e.message;
-    $("ai-provider").textContent = "unknown";
+    $("ai-provider").textContent = ai.isMock ? ai.label : `${ai.label}${ai.model ? " · " + ai.model : ""}`;
+    $("privacy").textContent = privacyLine(ai, backendUrl, local);
   }
+}
+
+// Exactly where each piece of a scan goes. Said plainly, because a person deserves to know before they
+// press Scan, and because every word of it has to stay true.
+function privacyLine(ai, backendUrl, local) {
+  const server = local ? `the AURA server on this machine (${backendUrl})` : `the AURA service (${backendUrl})`;
+  const where = `This page's structure, its accessibility results, its errors, its address and its title go to ${server}, which checks every claim against them. `
+    + "Screenshots stay in this browser.";
+  if (ai.isMock) {
+    return `${where} Mock AI is built in and makes no AI request at all.`;
+  }
+  return `${where} With AI on, your browser sends the evidence summary and one screenshot straight to `
+    + `${ai.label} using your own API key. AURA never receives that key.`;
 }
 
 // ------------------------------------------------------------------ tab access (activeTab lifecycle)
@@ -331,12 +371,13 @@ async function runScan() {
   try {
     const scanned = await getActiveTab().catch(() => null);
     const identity = scanned ? await pageIdentity(scanned.id) : null;
-    const { view, tabId } = await scanCurrentPage({
+    const { view, tabId, capture } = await scanCurrentPage({
       useAI: $("opt-ai").checked,
       interactions: $("opt-interact").checked,
       onStep: renderStep,
     });
     state.view = view; state.tabId = tabId; state.stale = false; state.filter = null; state.selected = null;
+    state.capture = capture || null;   // kept in memory only, for the per-finding screenshots
     if (identity && scanned.id === tabId) {
       const rec = { auditId: view.audit_id, documentId: identity.documentId, pageKey: identity.pageKey, view };
       audits.set(tabId, rec);
@@ -823,8 +864,8 @@ async function clearHighlight() {
   $("act-out").classList.add("hidden");
 }
 
-// Shows the part of the scan's capture this finding is about, with the element boxed. The image is
-// produced by the local AURA server from the capture it kept with the audit; nothing is uploaded.
+// Shows the part of the scan's capture this finding is about, with the element boxed. The capture never
+// left this browser: the crop is made here, from the image the scan is still holding in memory.
 let shotUrl = null;
 
 function revokeShot() {
@@ -836,7 +877,7 @@ async function doScreenshot() {
   actOut([h("p", { class: "muted" }, "Preparing the screenshot…")]);
   revokeShot();
   try {
-    shotUrl = await findingShot(state.view.audit_id, f.id);
+    shotUrl = await cropFinding(state.capture, f, (state.view.viewport || {}).width);
     const frame = h("div", { class: "shot-frame" });
     const img = h("img", { class: "shot", src: shotUrl,
       alt: "The part of the page this finding is about, with the problem outlined.",
@@ -855,7 +896,8 @@ async function doScreenshot() {
     frame.append(img);
     actOut([hint, frame]);
   } catch (e) {
-    actOut([h("h3", {}, "No screenshot for this one"), h("p", {}, e.message)], true);
+    const title = e instanceof NoShot ? "No screenshot for this one" : "The screenshot could not be prepared";
+    actOut([h("h3", {}, title), h("p", {}, e.message)], true);
   }
 }
 
@@ -917,62 +959,92 @@ async function doAsk(ev) {
 }
 
 // ------------------------------------------------------------------ AI provider
+// The provider, the model and the key are this browser's own: they are saved in the extension's storage
+// and the AURA service is never told any of them. The list of providers and models still comes from the
+// service, which documents what each model can do (whether it can be shown a screenshot, for one).
 let providerList = [];
 
 function providerRow(p) {
-  return h("option", { value: p.provider, selected: p.selected ? "" : null }, p.label);
+  return h("option", { value: p.provider }, p.label);
 }
 
 async function refreshProviders() {
+  const choice = await getAiChoice();
   try {
     const data = await api.providers();
     providerList = data.providers || [];
-    const select = $("provider-select");
-    select.replaceChildren(...providerList.map(providerRow));
-    select.value = data.selected;
-    applyProviderFields(data.selected, data.model);
   } catch (e) {
     $("provider-status").textContent = e.message;
+    return;
   }
+  const select = $("provider-select");
+  select.replaceChildren(...providerList.map(providerRow));
+  select.value = providerList.some((p) => p.provider === choice.provider) ? choice.provider : "mock";
+  await applyProviderFields(select.value, choice.model);
 }
 
-function applyProviderFields(providerKey, model) {
+async function applyProviderFields(providerKey, model) {
   const p = providerList.find((x) => x.provider === providerKey);
   const isMock = !p || p.is_mock;
   show("provider-model-field", !isMock);
   show("provider-key-field", !isMock);
-  $("provider-model").value = (providerKey === (state.health && state.health.ai.provider) && model) ? model : (p ? p.default_model || "" : "");
+  const saved = await getAiChoice();
+  const chosenModel = (providerKey === saved.provider && (model || saved.model)) || (p ? p.default_model || "" : "");
+  $("provider-model").value = chosenModel;
   $("provider-models").replaceChildren(...((p && p.models) || []).map((m) => h("option", { value: m })));
+  const storedKey = isMock ? "" : await getProviderKey(providerKey);
   $("provider-key").value = "";
-  $("provider-key").placeholder = p && p.key_configured
-    ? `Key already stored on the AURA server (${p.key_source})`
-    : "Stored on your local AURA server only";
+  $("provider-key").placeholder = storedKey
+    ? "A key is saved in this browser. Type a new one to replace it, or save empty to remove it."
+    : "Your key. Saved in this browser only, sent only to this provider.";
   $("provider-status").textContent = isMock
     ? "Mock AI returns scripted findings for demos and tests. It is not real model analysis."
-    : (p && p.key_configured ? "" : "No API key yet: add one, then test the connection.");
+    : (storedKey ? "" : "No API key yet: add one, then test the connection.")
+      + (p && p.model_capabilities && chosenModel && p.model_capabilities[chosenModel]
+         && p.model_capabilities[chosenModel].image_input === false
+         ? " This model cannot be shown images, so the scan will send text evidence only." : "");
 }
 
 async function saveProvider() {
   const provider = $("provider-select").value;
+  const model = $("provider-model").value.trim();
+  const typedKey = $("provider-key").value;
   $("provider-status").textContent = "Saving…";
   try {
-    const data = await api.selectProvider(provider, $("provider-model").value.trim(), $("provider-key").value);
-    providerList = data.providers || [];
+    await setAiChoice(provider, model);
+    // Only touched when something was typed, so saving a model does not wipe a key already stored.
+    if (typedKey !== "") await setProviderKey(provider, typedKey);
     $("provider-key").value = "";
+    const label = (providerList.find((p) => p.provider === provider) || {}).label || provider;
     await refreshHealth();
-    applyProviderFields(data.selected, data.model);
-    $("provider-status").textContent = `Saved. The next scan will use ${(providerList.find((p) => p.provider === data.selected) || {}).label}.`;
+    await applyProviderFields(provider, model);
+    const needsKey = callsProviderInBrowser(provider) && !(await getProviderKey(provider));
+    $("provider-status").textContent = needsKey
+      ? `Saved, but ${label} has no API key yet: the next scan cannot ask it for anything.`
+      : `Saved in this browser. The next scan will ask ${label}${model ? " / " + model : ""} directly.`;
   } catch (e) {
     $("provider-status").textContent = e.message;
   }
 }
 
+// Checks the key against the provider without running the model: a person should never be charged for a
+// request just to learn whether their key works.
 async function testProvider() {
+  const provider = $("provider-select").value;
   $("provider-status").textContent = "Testing…";
   try {
-    const r = await api.testProvider();
-    const label = { READY: "READY", NOT_CONFIGURED: "NOT CONFIGURED" }[r.status] || (r.blocked ? "CONNECTION FAILED" : r.status);
-    $("provider-status").textContent = `${label} — ${r.detail || ""}`;
+    if (!callsProviderInBrowser(provider)) {
+      const r = await api.testProvider();
+      $("provider-status").textContent = `${r.status === "READY" ? "READY" : r.status} — ${r.detail || ""}`;
+    } else {
+      const r = await checkProviderKey({
+        provider, model: $("provider-model").value.trim(), apiKey: await getProviderKey(provider),
+      });
+      const label = { READY: "READY", NOT_CONFIGURED: "NO KEY SAVED", AUTH_INVALID: "KEY REJECTED",
+                      MODEL_UNAVAILABLE: "MODEL UNAVAILABLE", RATE_LIMITED: "RATE LIMITED",
+                      CONNECTION_FAILED: "CONNECTION FAILED" }[r.status] || r.status;
+      $("provider-status").textContent = `${label} — ${r.detail || ""}`;
+    }
   } catch (e) {
     $("provider-status").textContent = `CONNECTION FAILED — ${e.message}`;
   }
@@ -987,7 +1059,7 @@ $("provider-toggle").addEventListener("click", async () => {
   if (opening) await refreshProviders();
 });
 $("provider-close").addEventListener("click", () => show("provider-card", false));
-$("provider-select").addEventListener("change", (e) => applyProviderFields(e.target.value, null));
+$("provider-select").addEventListener("change", (e) => { applyProviderFields(e.target.value, null); });
 $("provider-save").addEventListener("click", saveProvider);
 $("provider-test").addEventListener("click", testProvider);
 $("score-why").addEventListener("click", () => $("score-help").classList.toggle("hidden"));

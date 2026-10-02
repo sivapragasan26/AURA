@@ -1,10 +1,10 @@
 """
 Provider selection for the local AURA server.
 
-The extension chooses WHICH provider and model to use and may supply an API key once; the key is held here,
-in the server process only (never written to disk, never logged, never returned to the extension, never part
-of an audit). Key resolution itself stays with SessionCredentialsManager: a key set here behaves exactly like
-the dashboard's session credential, with the environment (.env) as the fallback.
+The extension chooses WHICH provider and model to use. It does NOT send its API key: the browser calls the
+provider directly with the user's key, so this process never holds, stores, logs or returns a credential
+belonging to a user (see aura/api/relay.py). A self-hosted server may still have a key of its own in its
+environment (.env), which SessionCredentialsManager resolves and which only /api/audits uses.
 
 Changing the provider affects the NEXT scan only: audits already stored keep the provider they ran with.
 There is no silent fallback to the Mock provider: an unusable provider is reported as unavailable.
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from aura.config import settings
-from aura.config.models import DEFAULT_MODELS, PROVIDER_MODELS
+from aura.config.models import DEFAULT_MODELS, MODEL_CAPABILITIES, PROVIDER_MODELS
 from aura.security.credentials import SessionCredentialsManager
 
 PROVIDER_LABELS = {
@@ -40,7 +40,7 @@ class Selection:
 
 
 class ProviderConfig:
-    """Thread-safe provider selection plus in-memory API keys."""
+    """Thread-safe provider selection. Holds no API key, by construction."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -48,7 +48,6 @@ class ProviderConfig:
         if provider not in SUPPORTED:
             provider = "mock"
         self._selection = Selection(provider, self._default_model(provider))
-        self._keys: Dict[str, str] = {}
 
     @staticmethod
     def _default_model(provider: str) -> Optional[str]:
@@ -58,32 +57,22 @@ class ProviderConfig:
         with self._lock:
             return Selection(self._selection.provider, self._selection.model)
 
-    def set(self, provider: str, model: Optional[str] = None, api_key: Optional[str] = None) -> Selection:
+    def set(self, provider: str, model: Optional[str] = None) -> Selection:
         provider = (provider or "").lower()
         if provider not in SUPPORTED:
             raise ValueError(f"Unknown provider '{provider}'")
         with self._lock:
             self._selection = Selection(provider, (model or "").strip() or self._default_model(provider))
-            if api_key is not None:
-                key = api_key.strip()
-                if key:
-                    self._keys[provider] = key
-                else:
-                    self._keys.pop(provider, None)  # empty value clears the stored key
             return Selection(self._selection.provider, self._selection.model)
 
-    def session_state(self) -> Dict[str, str]:
-        """Shape SessionCredentialsManager expects; used only inside this process."""
-        with self._lock:
-            return {f"{provider}_api_key": key for provider, key in self._keys.items()}
-
     def key_source(self, provider: str) -> str:
-        """Where this provider's key comes from, without revealing it."""
-        _, source = SessionCredentialsManager.get_credential_for_provider(provider, self.session_state())
+        """Where this SERVER's own key for the provider comes from, if it has one. Never the key itself."""
+        _, source = SessionCredentialsManager.get_credential_for_provider(provider, None)
         return source
 
     def has_key(self, provider: str) -> bool:
-        key, _ = SessionCredentialsManager.get_credential_for_provider(provider, self.session_state())
+        """Whether this server has its own key for the provider. The user's key is in their browser."""
+        key, _ = SessionCredentialsManager.get_credential_for_provider(provider, None)
         return bool(key)
 
     def describe(self) -> List[Dict[str, Any]]:
@@ -97,6 +86,10 @@ class ProviderConfig:
                 "is_mock": key == "mock",
                 "requires_key": key != "mock",
                 "models": list(PROVIDER_MODELS.get(key, [])),
+                # What each model can do, so the browser - which makes the AI call itself - knows whether
+                # to attach the screenshot and whether to ask for JSON. One table, in Python, under test.
+                "model_capabilities": {m: dict(MODEL_CAPABILITIES.get(m, {}))
+                                       for m in PROVIDER_MODELS.get(key, [])},
                 "default_model": self._default_model(key),
                 "key_configured": key == "mock" or self.has_key(key),
                 "key_source": "built in" if key == "mock" else self.key_source(key),

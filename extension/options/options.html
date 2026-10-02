@@ -15,14 +15,14 @@
 </head>
 <body>
   <h1>AURA settings</h1>
-  <p class="fine">The extension talks only to your local AURA server. AI provider API keys are configured on the server (<code>.env</code>) and are never stored in the extension.</p>
+  <p class="fine">AURA talks to the AURA service, or to an AURA server you run on this computer &mdash; nothing else. Your AI provider API key is held by this extension and is sent only to that provider: the AURA service never receives it. Set the provider and key in the panel&rsquo;s <strong>AI provider</strong> section.</p>
 
   <label for="backend">AURA server URL</label>
   <input id="backend" type="text" spellcheck="false" placeholder="http://127.0.0.1:8765">
 
-  <label for="token">Pairing token</label>
-  <input id="token" type="password" spellcheck="false" autocomplete="off" placeholder="Printed by: python -m aura.api">
-  <p class="fine">Start the server with <code>python -m aura.api</code>; it prints this token. It only authorises this extension to use your local server.</p>
+  <label for="token">Access token</label>
+  <input id="token" type="password" spellcheck="false" autocomplete="off" placeholder="Issued automatically by the AURA service">
+  <p class="fine">With the AURA service this is issued automatically on first use and there is nothing to paste. Running your own server? Start it with <code>python -m aura.api</code>, which prints a token, and paste it here. The token only authorises this extension to use that server.</p>
 
   <div class="row">
     <button id="save" class="btn">Save &amp; test connection</button>

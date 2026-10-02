@@ -1,10 +1,52 @@
-// Client for the local AURA API. The extension holds only the backend URL and the pairing token;
-// AI provider keys live on the AURA server and are never sent to or stored in the extension.
-export const DEFAULT_BACKEND = "http://127.0.0.1:8765";
+// Client for the AURA API.
+//
+// What goes to the AURA service: the page's structure, its accessibility results, its runtime errors and
+// its title and address. What never goes there: your AI provider key, and the screenshots. The key stays
+// in this extension's own storage and is sent only to the provider you chose (see providers.js); the
+// screenshots stay in the browser and are shown to you from here.
+//
+// The extension registers itself on first use and keeps the token it is given, so there is no pairing
+// step. A self-hosted AURA server can still be paired by hand from the options page.
+
+// The hosted service. Change it in Settings to run AURA on your own machine instead.
+export const HOSTED_BACKEND = "https://aura-api.onrender.com";
+export const LOCAL_BACKEND = "http://127.0.0.1:8765";
+export const DEFAULT_BACKEND = HOSTED_BACKEND;
+
+const isLocal = (url) => /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test((url || "").replace(/\/+$/, ""));
 
 export async function getSettings() {
   const s = await chrome.storage.local.get({ backendUrl: DEFAULT_BACKEND, token: "" });
   return { backendUrl: (s.backendUrl || DEFAULT_BACKEND).replace(/\/+$/, ""), token: s.token || "" };
+}
+
+// The user's AI provider key. Held in this extension's storage, never sent to the AURA service.
+export async function getProviderKey(provider) {
+  const s = await chrome.storage.local.get({ providerKeys: {} });
+  return (s.providerKeys || {})[provider] || "";
+}
+
+export async function setProviderKey(provider, key) {
+  const s = await chrome.storage.local.get({ providerKeys: {} });
+  const keys = { ...(s.providerKeys || {}) };
+  if (key && key.trim()) keys[provider] = key.trim();
+  else delete keys[provider];
+  await chrome.storage.local.set({ providerKeys: keys });
+}
+
+export async function hasProviderKey(provider) {
+  return !!(await getProviderKey(provider));
+}
+
+// Which provider and model this browser will call. Kept here, not on the server: a hosted server is
+// shared, and one person's choice must not become everyone's.
+export async function getAiChoice() {
+  const s = await chrome.storage.local.get({ aiProvider: "mock", aiModel: "" });
+  return { provider: s.aiProvider || "mock", model: s.aiModel || "" };
+}
+
+export async function setAiChoice(provider, model) {
+  await chrome.storage.local.set({ aiProvider: provider, aiModel: (model || "").trim() });
 }
 
 export class ApiError extends Error {
@@ -16,25 +58,60 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { method = "GET", body = undefined, timeoutMs = 180000 } = {}) {
+function unreachable(backendUrl) {
+  return isLocal(backendUrl)
+    ? `Cannot reach the AURA server at ${backendUrl}. Start it with: python -m aura.api`
+    : `Cannot reach the AURA service at ${backendUrl}. Check your connection, or point AURA at a server `
+      + "on your own machine in Settings.";
+}
+
+// First use: ask the service for this install's own token. Nothing identifies you in the request.
+async function register(backendUrl) {
+  let res;
+  try {
+    res = await fetch(`${backendUrl}/api/register`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+  } catch (e) {
+    throw new ApiError(unreachable(backendUrl), { code: "UNREACHABLE" });
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const err = (body && body.error) || {};
+    throw new ApiError(err.message || `AURA could not register this install (HTTP ${res.status}).`,
+      { status: res.status, code: err.code || "REGISTRATION_FAILED" });
+  }
+  const data = await res.json();
+  if (!data.token) throw new ApiError("The AURA service did not issue a token.", { code: "REGISTRATION_FAILED" });
+  await chrome.storage.local.set({ token: data.token });
+  return data.token;
+}
+
+async function request(path, { method = "GET", body = undefined, timeoutMs = 180000, retryAuth = true } = {}) {
   const { backendUrl, token } = await getSettings();
+  const authToken = token || await register(backendUrl);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res;
   try {
     res = await fetch(`${backendUrl}${path}`, {
       method,
-      headers: { "Content-Type": "application/json", "X-AURA-Token": token },
+      headers: { "Content-Type": "application/json", "X-AURA-Token": authToken },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: ctrl.signal,
     });
   } catch (e) {
     throw new ApiError(
-      e.name === "AbortError" ? "The AURA server did not respond in time." :
-      `Cannot reach the AURA server at ${backendUrl}. Start it with: python -m aura.api`,
+      e.name === "AbortError" ? "The AURA server did not respond in time." : unreachable(backendUrl),
       { code: e.name === "AbortError" ? "TIMEOUT" : "UNREACHABLE" });
   } finally {
     clearTimeout(timer);
+  }
+  // A token from a different deployment, or from before a restart, is simply replaced once. A token typed
+  // in by hand for a local server is never thrown away: the person chose it.
+  if (res.status === 401 && retryAuth && !isLocal(backendUrl)) {
+    await chrome.storage.local.set({ token: "" });
+    return request(path, { method, body, timeoutMs, retryAuth: false });
   }
   let data = null;
   try { data = await res.json(); } catch (_) { /* non-JSON error */ }
@@ -46,33 +123,19 @@ async function request(path, { method = "GET", body = undefined, timeoutMs = 180
   return data;
 }
 
-// The per-finding screenshot comes back as a PNG, not JSON, so it bypasses `request`.
-export async function findingShot(auditId, findingId) {
-  const { backendUrl, token } = await getSettings();
-  const url = `${backendUrl}/api/audits/${encodeURIComponent(auditId)}/findings/${encodeURIComponent(findingId)}`
-    + "/screenshot";
-  let res;
-  try {
-    res = await fetch(url, { headers: { "X-AURA-Token": token } });
-  } catch (e) {
-    throw new ApiError("Cannot reach the AURA server for the screenshot.", { code: "UNREACHABLE" });
-  }
-  if (!res.ok) {
-    let message = `The screenshot could not be produced (HTTP ${res.status}).`;
-    try { const body = await res.json(); if (body && body.error) message = body.error.message || message; } catch (_) {}
-    throw new ApiError(message, { status: res.status, code: "NO_SHOT" });
-  }
-  return URL.createObjectURL(await res.blob());
-}
-
 export const api = {
-  health: () => request("/api/health", { timeoutMs: 5000 }),
+  health: () => request("/api/health", { timeoutMs: 15000 }),
   interactionPlan: (pageUrl, elements) => request("/api/interaction-plan", { method: "POST", body: { page_url: pageUrl, elements } }),
+  // Two-phase scan: the server prepares the prompt, the browser calls the provider, the server verifies.
+  prepareAudit: (bundle, screenshotAttached) =>
+    request("/api/audits/prepare", { method: "POST", body: { bundle, screenshot_attached: !!screenshotAttached }, timeoutMs: 120000 }),
+  completeAudit: (auditId, payload) =>
+    request(`/api/audits/${encodeURIComponent(auditId)}/complete`, { method: "POST", body: payload, timeoutMs: 120000 }),
+  // One request, analysed entirely on the server: a deterministic-only scan, or the built-in demo AI.
   createAudit: (bundle, options) => request("/api/audits", { method: "POST", body: { bundle, options }, timeoutMs: 240000 }),
   getAudit: (id) => request(`/api/audits/${encodeURIComponent(id)}`),
   explain: (id, fid) => request(`/api/audits/${encodeURIComponent(id)}/findings/${encodeURIComponent(fid)}/explain`, { method: "POST", body: {} }),
   providers: () => request("/api/providers"),
-  selectProvider: (provider, model, apiKey) => request("/api/providers/select", { method: "POST", body: { provider, model, api_key: apiKey } }),
   testProvider: () => request("/api/providers/test", { method: "POST", body: {}, timeoutMs: 45000 }),
   ask: (id, question, findingId) => request(`/api/audits/${encodeURIComponent(id)}/ask`, { method: "POST", body: { question, finding_id: findingId || null } }),
 };

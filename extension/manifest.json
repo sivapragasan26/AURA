@@ -27,7 +27,15 @@
   },
   "options_page": "options/options.html",
   "permissions": ["sidePanel", "activeTab", "scripting", "storage"],
-  "host_permissions": ["http://127.0.0.1:8765/*", "http://localhost:8765/*"],
+  "host_permissions": [
+    "https://aura-api.onrender.com/*",
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*",
+    "https://api.groq.com/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.anthropic.com/*"
+  ],
   "optional_host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"

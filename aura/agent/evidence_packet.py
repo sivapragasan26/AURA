@@ -47,6 +47,10 @@ class EvidencePacket:
     max_findings: int
     screenshot_base64: Optional[str] = None
     screenshot_mime: str = "image/png"
+    # The screenshot stayed in the browser and the browser attaches it to its own provider request (hosted
+    # mode). The image never reaches this process, but the prompt must still tell the model it is looking
+    # at one, so the packet is told whether one is attached rather than inferring it from bytes it holds.
+    screenshot_in_browser: bool = False
     # AURA-internal: ref -> {selector, tag, text}. Never sent to the AI.
     ref_map: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
@@ -54,7 +58,7 @@ class EvidencePacket:
         """The structured evidence the AI receives (the screenshot travels separately as an image)."""
         return {
             "page": self.page,
-            "screenshot_attached": bool(self.screenshot_base64),
+            "screenshot_attached": bool(self.screenshot_base64) or self.screenshot_in_browser,
             "targeted_dom": self.targeted_dom,
             "layout": self.layout,
             "interactions": self.interactions,
@@ -130,6 +134,7 @@ def build_evidence_packet(
     screenshot_base64: Optional[str] = None,
     screenshot_mime: str = "image/png",
     max_findings_cap: Optional[int] = None,
+    screenshot_in_browser: bool = False,
 ) -> EvidencePacket:
     page_url = getattr(telemetry, "url", "")
     elements = dom_summary.get("all_elements") or []
@@ -275,6 +280,7 @@ def build_evidence_packet(
         max_findings=choose_max_findings(n_interactive, max_findings_cap),
         screenshot_base64=screenshot_base64,
         screenshot_mime=screenshot_mime,
+        screenshot_in_browser=screenshot_in_browser,
         ref_map=ref_map,
     )
 

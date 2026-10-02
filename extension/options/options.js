@@ -1,13 +1,16 @@
-import { api, DEFAULT_BACKEND, getSettings } from "../sidepanel/api.js";
+import { api, DEFAULT_BACKEND, HOSTED_BACKEND, getSettings } from "../sidepanel/api.js";
 
 const $ = (id) => document.getElementById(id);
 
+// Two addresses are allowed, and nothing else: the AURA service, and an AURA server running on this
+// computer. Anything else would send this page's structure to a stranger's host.
 function normalizeBackend(raw) {
   const u = new URL((raw || DEFAULT_BACKEND).trim());
-  if (u.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(u.hostname)) {
-    throw new Error("The AURA server must run on this computer (http://127.0.0.1 or http://localhost).");
-  }
-  return `${u.protocol}//${u.host}`;
+  const origin = `${u.protocol}//${u.host}`;
+  if (origin === HOSTED_BACKEND) return origin;
+  if (u.protocol === "http:" && ["127.0.0.1", "localhost"].includes(u.hostname)) return origin;
+  throw new Error(`The backend must be ${HOSTED_BACKEND} or an AURA server on this computer `
+    + "(http://127.0.0.1 or http://localhost).");
 }
 
 async function load() {
@@ -27,7 +30,7 @@ async function save() {
   }
   // A non-default port needs host access to that port (requested now, from this user gesture)
   const origin = `${backendUrl}/*`;
-  if (!["http://127.0.0.1:8765/*", "http://localhost:8765/*"].includes(origin)) {
+  if (![`${HOSTED_BACKEND}/*`, "http://127.0.0.1:8765/*", "http://localhost:8765/*"].includes(origin)) {
     const host = new URL(backendUrl).hostname;
     const granted = await chrome.permissions.request({ origins: [`http://${host}/*`] });
     if (!granted) { status.textContent = "Access to the server address was not granted."; return; }
@@ -37,8 +40,9 @@ async function save() {
   try {
     const h = await api.health();
     status.textContent = h.paired
-      ? `Connected to AURA ${h.engine_version}. AI provider: ${h.ai.provider}${h.ai.model ? " / " + h.ai.model : ""}.`
-      : "Server reachable, but the pairing token is missing or wrong.";
+      ? `Connected to AURA ${h.engine_version}. Your AI provider and key stay in this browser; `
+        + "set them in the panel's AI provider section."
+      : "Server reachable, but the token is missing or wrong.";
   } catch (e) {
     status.textContent = e.message;
   }

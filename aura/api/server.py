@@ -7,11 +7,18 @@ Endpoints
   POST /api/register                                 issues this install its own token (no pairing step)
   GET  /api/health                                   engine + provider status (no secrets); `paired` if token valid
   POST /api/interaction-plan                         live-session interaction plan (policy is enforced HERE)
-  POST /api/audits                                   analyse an EvidenceBundle -> audit view
+  POST /api/audits/prepare                           EvidenceBundle -> {audit_id, prompt} for the browser
+  POST /api/audits/{audit_id}/complete               the browser's raw model response -> audit view
+  POST /api/audits                                   analyse an EvidenceBundle here -> audit view (self-hosted)
   GET  /api/audits/{audit_id}                        stored audit view
   POST /api/audits/{audit_id}/findings/{fid}/explain grounded explanation (no AI request)
   GET  /api/audits/{audit_id}/findings/{fid}/screenshot  the capture, cropped to that finding
   POST /api/audits/{audit_id}/ask                    Ask AURA (one AI request; foundation)
+
+A scan comes in two halves so that the model call happens in the user's browser with the user's own key:
+prepare returns the prompt, complete brings back the response and runs the verification. This server holds
+no provider credential of its own on that path - see aura/api/relay.py. /api/audits remains for a
+self-hosted server whose own environment has a key, and is the only path that makes an AI request here.
 
 AI concurrency is 1: every AI-using request is serialized by one lock (provider rate limits, reliability).
 """
@@ -32,9 +39,10 @@ from aura import __version__ as ENGINE_VERSION
 from aura.agent.provider_status import run_preflight
 from aura.agent.providers import get_ai_provider
 from aura.agents.browser_agent import BrowserAgent
-from aura.agents.orchestrator import AURAOrchestrator
+from aura.agents.orchestrator import AURAOrchestrator, build_ai_prompt
 from aura.api import security
 from aura.api.provider_config import PROVIDER_LABELS, ProviderConfig
+from aura.api.relay import BrowserRelayProvider, PendingScan, PendingScans, PENDING_TTL_SECONDS
 from aura.api import shots
 from aura.api.store import AuditStore
 from aura.api.views import build_audit_view
@@ -88,7 +96,9 @@ def make_provider(provider: Optional[str] = None, model: Optional[str] = None):
     """Builds the selected provider with its server-side credentials (never a silent Mock fallback)."""
     if provider is None:
         provider, model = configured_provider()
-    return get_ai_provider(provider_type=provider, model_name=model, session_state=PROVIDERS.session_state())
+    # No session_state: this process keeps no API key for anyone. A self-hosted server resolves its own
+    # key from its environment; the hosted service has none, and the browser calls the provider directly.
+    return get_ai_provider(provider_type=provider, model_name=model, session_state=None)
 
 
 def _error(status: int, code: str, message: str, **extra) -> JSONResponse:
@@ -98,6 +108,7 @@ def _error(status: int, code: str, message: str, **extra) -> JSONResponse:
 def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) -> Starlette:
     api_token = token or security.load_or_create_token()
     audit_store = store or AuditStore()
+    pending = PendingScans()
     allow_list = security.allowed_origins()
 
     def guard(request: Request, require_token: bool = True) -> Optional[JSONResponse]:
@@ -175,9 +186,13 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         data, err = await read_json(request)
         if err:
             return err
+        if (data or {}).get("api_key"):
+            # Refused rather than ignored, so a client cannot believe its key was accepted and stored.
+            return _error(400, "KEY_NOT_ACCEPTED",
+                          "AURA never receives your API key. Your browser calls the AI provider directly "
+                          "with the key you entered in the extension's settings.")
         try:
-            selection = PROVIDERS.set(str((data or {}).get("provider") or ""), (data or {}).get("model"),
-                                      (data or {}).get("api_key"))
+            selection = PROVIDERS.set(str((data or {}).get("provider") or ""), (data or {}).get("model"))
         except ValueError as e:
             return _error(400, "UNKNOWN_PROVIDER", str(e))
         logger.info(f"AI provider selected: {selection.provider} / {selection.model}")  # never logs the key
@@ -231,6 +246,98 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
                 blocked.append(entry)
         return JSONResponse({"plan": plan, "blocked": blocked[:50], "budget": budget,
                              "policy": "AURA live-session policy: clicks only; no typing, form submission or navigation."})
+
+    def _prepare(bundle: EvidenceBundle, screenshot_attached: bool) -> Dict[str, Any]:
+        audit_id = AURAOrchestrator.generate_audit_id()
+        packet = build_ai_prompt(bundle, screenshot_attached=screenshot_attached)
+        pending.put(audit_id, PendingScan(
+            bundle=bundle, prompt=packet.to_prompt(), max_findings=packet.max_findings,
+            screenshot_attached=screenshot_attached, screenshot_captured=bool(bundle.capture_size),
+        ))
+        return {"audit_id": audit_id, "prompt": packet.to_prompt(), "max_findings": packet.max_findings,
+                "expires_in": PENDING_TTL_SECONDS, "api_version": API_VERSION}
+
+    async def prepare_audit(request: Request) -> JSONResponse:
+        """
+        First half of a scan: the evidence becomes the prompt, and the browser makes the model call.
+
+        `screenshot_attached` is the browser saying whether it will attach its capture to that call. The
+        prompt is built from it and kept, so the response is later interpreted against exactly the prompt
+        the model was given - the browser cannot claim otherwise afterwards.
+        """
+        denied = guard(request)
+        if denied:
+            return denied
+        data, err = await read_json(request)
+        if err:
+            return err
+        try:
+            bundle = EvidenceBundle(**((data or {}).get("bundle") or {}))
+        except ValidationError as e:
+            problems = [{"field": ".".join(str(p) for p in d.get("loc", [])), "problem": d.get("msg")} for d in e.errors()[:10]]
+            return _error(422, "INVALID_EVIDENCE", "Evidence bundle failed validation.", problems=problems)
+        try:
+            prepared = await run_in_threadpool(_prepare, bundle, bool((data or {}).get("screenshot_attached")))
+        except ValueError as e:
+            return _error(400, "INVALID_EVIDENCE", sanitize_provider_error(e)[:300])
+        except Exception as e:
+            logger.error(f"Preparing a scan failed: {sanitize_provider_error(e)}")
+            return _error(500, "SCAN_FAILED", "The AURA engine could not prepare this page for analysis.",
+                          detail=sanitize_provider_error(e)[:300])
+        return JSONResponse(prepared)
+
+    def _complete(audit_id: str, scan: PendingScan, provider_key: str, model: str, response: Optional[str],
+                  failure: Optional[Dict[str, Any]], vision: bool, reported: Dict[str, Any]) -> Dict[str, Any]:
+        relay = BrowserRelayProvider(
+            provider_key, model, raw_response=response, failure=failure, vision=vision,
+            screenshot_captured=scan.screenshot_captured, screenshot_attached=scan.screenshot_attached,
+            reported=reported)
+        orchestrator = AURAOrchestrator(provider=relay)
+        report = orchestrator.analyze_evidence(scan.bundle, skip_ai=False, audit_id=audit_id)
+        return build_audit_view(report)
+
+    async def complete_audit(request: Request) -> JSONResponse:
+        """
+        Second half of a scan: the response the browser got from the provider, verified here.
+
+        The response is treated exactly as a response from a provider called here would be: parsed against
+        the schema, every candidate independently checked against the evidence, and anything unsupported
+        dropped. A model that answers with nonsense produces no findings, not bad findings.
+        """
+        denied = guard(request)
+        if denied:
+            return denied
+        data, err = await read_json(request)
+        if err:
+            return err
+        data = data or {}
+        audit_id = request.path_params["audit_id"]
+        scan = pending.take(audit_id)
+        if scan is None:
+            return _error(404, "SCAN_NOT_PENDING",
+                          "This scan is no longer waiting for a result. Scan the page again.")
+        response = data.get("response")
+        failure = data.get("failure") if isinstance(data.get("failure"), dict) else None
+        if not isinstance(response, str) or not response.strip():
+            response = None
+        if response is None and failure is None:
+            return _error(400, "INVALID_REQUEST", "Send either the model's response or the provider failure.")
+        provider_key = str(data.get("provider") or "unknown").lower()
+        if provider_key not in PROVIDER_LABELS:
+            return _error(400, "UNKNOWN_PROVIDER", f"Unknown provider '{provider_key}'")
+        model = str(data.get("model") or "")[:120]
+        reported = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+        try:
+            view = await run_in_threadpool(_complete, audit_id, scan, provider_key, model, response,
+                                           failure, bool(data.get("vision")), reported)
+        except ValueError as e:
+            return _error(400, "INVALID_EVIDENCE", sanitize_provider_error(e)[:300])
+        except Exception as e:
+            logger.error(f"Completing a scan failed: {sanitize_provider_error(e)}")
+            return _error(500, "SCAN_FAILED", "The AURA engine failed to analyse this page.",
+                          detail=sanitize_provider_error(e)[:300])
+        audit_store.put(view)
+        return JSONResponse(view)
 
     def _run_audit(bundle: EvidenceBundle, use_ai: bool) -> Dict[str, Any]:
         provider_key, model = configured_provider()
@@ -340,6 +447,8 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         Route("/api/providers/select", select_provider, methods=["POST"]),
         Route("/api/providers/test", test_provider, methods=["POST"]),
         Route("/api/interaction-plan", interaction_plan, methods=["POST"]),
+        Route("/api/audits/prepare", prepare_audit, methods=["POST"]),
+        Route("/api/audits/{audit_id}/complete", complete_audit, methods=["POST"]),
         Route("/api/audits", create_audit, methods=["POST"]),
         Route("/api/audits/{audit_id}", get_audit, methods=["GET"]),
         Route("/api/audits/{audit_id}/findings/{finding_id}/explain", explain, methods=["POST"]),

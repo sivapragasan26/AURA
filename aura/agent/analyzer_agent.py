@@ -207,9 +207,14 @@ class AnalyzerAgent:
         interaction_log: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Runs multimodal AI analysis on the focused evidence packet; returns summary, issues and diagnostics."""
-        provider_name = self.provider.__class__.__name__.replace("Provider", "")
+        # display_name lets a stand-in provider report the provider that actually answered: in hosted mode
+        # the browser makes the call and relays the response, and the audit must name Groq or Gemini, not
+        # the shim that carried it (aura/api/relay.py).
+        provider_name = getattr(self.provider, "display_name", None) or self.provider.__class__.__name__.replace("Provider", "")
         model_name = getattr(self.provider, "model", "default")
         provider_key = getattr(self.provider, "provider_key", "unknown")
+        # What the browser attached to the request it made. None for a provider called from this process.
+        relay_shot = getattr(self.provider, "browser_screenshot", None)
 
         diagnostics = AIDiagnostics(
             provider_name=provider_name,
@@ -230,6 +235,7 @@ class AnalyzerAgent:
             interaction_log=interaction_log,
             screenshot_base64=screenshot_payload.get("base64_data"),
             screenshot_mime=screenshot_payload.get("mime_type") or "image/png",
+            screenshot_in_browser=bool(relay_shot and relay_shot.get("attached")),
         )
         self.last_packet = packet
         diagnostics.max_findings_requested = packet.max_findings
@@ -238,17 +244,22 @@ class AnalyzerAgent:
             "interactions": len(packet.interactions),
             "accessibility_summaries": len(packet.deterministic_findings.get("accessibility", [])),
             "runtime_events": len(packet.deterministic_findings.get("runtime", [])),
-            "screenshot_attached": bool(packet.screenshot_base64),
+            "screenshot_attached": bool(packet.screenshot_base64) or packet.screenshot_in_browser,
             "prompt_chars": len(packet.to_prompt()),
         }
 
         # Phase 5: Screenshot Provenance Tracking
         caps = getattr(self.provider, "capabilities", lambda: None)() or MODEL_CAPABILITIES.get(model_name, {})
         supports_vision = bool(caps.get("image_input", False)) if isinstance(caps, dict) else False
-        diagnostics.screenshot_captured = bool(screenshot_payload.get("available"))
-        diagnostics.screenshot_attached_to_request = bool(packet.screenshot_base64)
-        diagnostics.multimodal_request = bool(packet.screenshot_base64 and supports_vision)
-        diagnostics.screenshot_evaluated_by_model = bool(packet.screenshot_base64 and supports_vision)
+        captured = bool(screenshot_payload.get("available"))
+        attached = bool(packet.screenshot_base64)
+        if relay_shot is not None:
+            # The image never came here, so only the browser's report can say what the model received.
+            captured, attached = bool(relay_shot.get("captured")), bool(relay_shot.get("attached"))
+        diagnostics.screenshot_captured = captured
+        diagnostics.screenshot_attached_to_request = attached
+        diagnostics.multimodal_request = bool(attached and supports_vision)
+        diagnostics.screenshot_evaluated_by_model = bool(attached and supports_vision)
 
         # 2. Invoke AI provider
         try:

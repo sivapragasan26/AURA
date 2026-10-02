@@ -5,7 +5,14 @@
 // (form-field values excluded), axe-core results (no HTML snippets), runtime errors raised during the scan,
 // failed resource loads (Resource Timing API), optional safe interactions, one viewport screenshot.
 // Never collected: cookies, storage, passwords or typed field values, browsing history, other tabs.
-import { api } from "./api.js";
+//
+// Where each piece goes. The page's structure, accessibility results and runtime errors go to the AURA
+// service, which prepares the prompt and verifies whatever the model answers. The SCREENSHOTS do not: they
+// stay in this browser. One of them is attached by the browser to its own request to the AI provider, and
+// the other is cropped here to show a person where a finding is. The AURA service is told only how large
+// the capture was, so it can still say whether a finding lies inside it.
+import { api, getAiChoice, getProviderKey } from "./api.js";
+import { callProvider, callsProviderInBrowser, ProviderCallError, PROVIDERS } from "./providers.js";
 import {
   installRuntimeProbe, readRuntimeProbe, removeRuntimeProbe,
   extractDom, agentPageInfo, agentFacts, agentClick, agentRunAxe, clearPageOverlays,
@@ -72,10 +79,10 @@ async function captureViewport(windowId, viewport) {
     canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
     out = await canvas.convertToBlob({ type: "image/png" });
   }
-  const buf = new Uint8Array(await out.arrayBuffer());
-  let bin = "";
-  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-  return btoa(bin);
+  const final = await createImageBitmap(out);
+  const size = { width: final.width, height: final.height };
+  final.close();
+  return { base64: await blobToBase64(out), ...size };
 }
 
 // Full-page capture for the panel's per-finding screenshots. A screenshot only covers what is on screen,
@@ -158,7 +165,7 @@ async function captureFullPage(tabId, windowId, viewport, onNote) {
     out.getContext("2d").drawImage(canvas, 0, 0, canvas.width, filled, 0, 0, canvas.width, filled);
   }
   if (onNote) onNote(`${captured} screens · ${out.width}×${out.height} · ${stopped}`);
-  return await blobToBase64(await out.convertToBlob({ type: "image/png" }));
+  return { base64: await blobToBase64(await out.convertToBlob({ type: "image/png" })), width: out.width, height: out.height };
 }
 
 async function blobToBase64(blob) {
@@ -166,6 +173,90 @@ async function blobToBase64(blob) {
   let bin = "";
   for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
   return btoa(bin);
+}
+
+
+// Runs the analysis for one bundle and returns the audit view.
+//
+// With a real AI provider the model call happens HERE, in the browser, with the key the user saved in
+// AURA's settings: the server prepares the prompt, this calls the provider, and the server verifies the
+// answer. The key never goes to the AURA service. A deterministic-only scan, and the built-in demo
+// provider, need no key and are analysed in one request on the server.
+//
+// Whatever the provider does - refuses the key, rate limits, times out - is reported to the server as a
+// failed AI call, so the scan still returns its deterministic findings and says plainly why there are no
+// AI ones. It never silently turns into a deterministic scan.
+async function analyse({ bundle, useAI, image, step }) {
+  const LABEL_DET = "AURA analysis (deterministic only)";
+  const LABEL_AI = "AURA analysis (deterministic + AI + verification)";
+
+  if (!useAI) {
+    step(LABEL_DET, "running");
+    const view = await api.createAudit(bundle, { ai: false });
+    step(LABEL_DET, "done", `${view.findings.length} findings`);
+    return view;
+  }
+
+  const choice = await getAiChoice();
+  if (!callsProviderInBrowser(choice.provider)) {
+    // The demo provider is built into the engine and uses no key.
+    step(LABEL_AI, "running");
+    const view = await api.createAudit(bundle, { ai: true });
+    step(LABEL_AI, "done", `${view.findings.length} findings`);
+    return view;
+  }
+
+  const label = PROVIDERS[choice.provider].label;
+  const apiKey = await getProviderKey(choice.provider);
+  const caps = await modelCapabilities(choice.provider, choice.model);
+  const attach = !!(image && apiKey && caps.image_input);
+
+  step("Preparing the evidence for analysis", "running");
+  const prepared = await api.prepareAudit(bundle, attach);
+  step("Preparing the evidence for analysis", "done",
+    `${Math.round(prepared.prompt.length / 1024)} KB prompt · up to ${prepared.max_findings} findings`);
+
+  const detail = attach ? `${label} · with the screenshot` : `${label} · text only`;
+  step(`Asking ${label} (your key, straight from this browser)`, "running");
+  let answer = null;
+  let failure = null;
+  try {
+    answer = await callProvider({
+      provider: choice.provider, model: choice.model, apiKey, prompt: prepared.prompt,
+      image: attach ? image.base64 : null, jsonMode: caps.json_mode !== false,
+    });
+    step(`Asking ${label} (your key, straight from this browser)`, "done",
+      `${detail} · ${Math.round(answer.response.length / 1024)} KB answer`);
+  } catch (e) {
+    if (!(e instanceof ProviderCallError)) throw e;
+    failure = { http_status: e.status, message: e.message, retry_after_seconds: e.retryAfter };
+    step(`Asking ${label} (your key, straight from this browser)`, "warn", e.message);
+  }
+
+  step("Verifying every claim against the evidence", "running");
+  const view = await api.completeAudit(prepared.audit_id, {
+    provider: choice.provider,
+    model: choice.model,
+    vision: !!caps.image_input,
+    response: answer ? answer.response : null,
+    failure,
+    meta: answer ? answer.meta : {},
+  });
+  step("Verifying every claim against the evidence", "done", `${view.findings.length} findings`);
+  return view;
+}
+
+// What the chosen model can do, as the engine documents it. Asked of the server rather than kept here,
+// so there is one such table.
+let capabilityCache = null;
+async function modelCapabilities(provider, model) {
+  try {
+    if (!capabilityCache) capabilityCache = (await api.providers()).providers || [];
+    const entry = capabilityCache.find((p) => p.provider === provider);
+    const caps = entry && entry.model_capabilities && entry.model_capabilities[model];
+    if (caps) return caps;
+  } catch (_) { /* fall through: assume the least, never assume vision */ }
+  return { image_input: false, json_mode: true };
 }
 
 const INTERACTIVE = new Set(["button", "a", "input"]);
@@ -278,6 +369,7 @@ export async function scanCurrentPage({ useAI, interactions, onStep }) {
     });
     step("Collecting runtime signals", "done", `${console_.filter((c) => c.type !== "warning").length} errors · ${info.network_failures.length} failed requests`);
 
+    const capture = fullPage || screenshot;
     const bundle = {
       source: "extension",
       collector_version: COLLECTOR_VERSION,
@@ -293,8 +385,9 @@ export async function scanCurrentPage({ useAI, interactions, onStep }) {
         network: info.network_failures.map((n) => ({ url: stripUrl(n.url), status: n.status, status_text: "", method: n.method })),
       },
       interactions: interactionLog,
-      screenshot_png_base64: screenshot,
-      screenshot_fullpage_png_base64: fullPage,
+      // The images themselves stay here. Only their size goes, so the server can tell whether a finding
+      // sits inside the capture the panel will crop.
+      capture_size: capture ? { width: capture.width, height: capture.height } : null,
       target_boxes: targetBoxes,
       captured_at: new Date().toISOString(),
     };
@@ -302,11 +395,8 @@ export async function scanCurrentPage({ useAI, interactions, onStep }) {
     await exec(tabId, { world: "MAIN", func: removeRuntimeProbe }).catch(() => {});
     probeInstalled = false;
 
-    step(useAI ? "AURA analysis (deterministic + AI + verification)" : "AURA analysis (deterministic only)", "running");
-    const view = await api.createAudit(bundle, { ai: useAI });
-    step(useAI ? "AURA analysis (deterministic + AI + verification)" : "AURA analysis (deterministic only)", "done",
-      `${view.findings.length} findings`);
-    return { view, tabId, windowId: tab.windowId };
+    const view = await analyse({ bundle, useAI, image: screenshot, step });
+    return { view, tabId, windowId: tab.windowId, capture };
   } finally {
     if (probeInstalled) await exec(tabId, { world: "MAIN", func: removeRuntimeProbe }).catch(() => {});
   }

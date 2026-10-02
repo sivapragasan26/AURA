@@ -91,11 +91,15 @@ def test_health_needs_no_token_but_reports_pairing(client, monkeypatch):
     for metadata_field in ("provider_key", "key_configured", "key_source"):
         body = body.replace(metadata_field, "")
     assert "key" not in body
+    # A self-hosted server may have its own key in its environment. Health may say a key is configured;
+    # it must never show the key. (A user's key is never here at all: the browser calls the provider.)
     secret = "gsk_liveprovidersecret_0123456789"
+    monkeypatch.setattr(settings, "GROQ_API_KEY", secret)
     providers = ProviderConfig()
-    providers.set("groq", api_key=secret)
+    providers.set("groq")
     monkeypatch.setattr(api_server, "PROVIDERS", providers)
     with_key = json.dumps(client.get("/api/health").json())
+    assert providers.has_key("groq") is True
     assert secret not in with_key and with_key.count("key_configured") == 1
 
 
@@ -410,6 +414,13 @@ def _bundle_keys_sent_by_the_extension() -> set:
     return keys
 
 
+# The captures are deliberately NOT sent by the extension: they stay in the browser, which attaches one to
+# its own request to the AI provider and crops the other itself (extension/sidepanel/shot.js). The fields
+# remain accepted for a server that is given a capture another way - the Playwright collector and the
+# dashboard both do - which is what aura/api/shots.py still serves.
+HELD_IN_THE_BROWSER = {"screenshot_png_base64", "screenshot_fullpage_png_base64"}
+
+
 def test_the_extension_sends_exactly_the_fields_the_server_declares():
     from aura.evidence.bundle import EvidenceBundle
 
@@ -417,10 +428,13 @@ def test_the_extension_sends_exactly_the_fields_the_server_declares():
     declared = set(EvidenceBundle.model_fields)
     assert sent, "no bundle keys were parsed out of scanner.js"
     unknown = sorted(sent - declared)
-    unused = sorted(declared - sent)
+    unused = sorted(declared - sent - HELD_IN_THE_BROWSER)
     assert not unknown, (f"scanner.js sends {unknown}, which EvidenceBundle does not declare. The server "
                          f"would silently drop that evidence.")
     assert not unused, (f"EvidenceBundle declares {unused}, which scanner.js never sends.")
+    assert not (sent & HELD_IN_THE_BROWSER), (
+        f"scanner.js sends {sorted(sent & HELD_IN_THE_BROWSER)}. The screenshots must stay in the browser: "
+        f"the panel's privacy notice says so, and the service holds nothing on disk.")
 
 
 def test_an_unknown_field_costs_the_evidence_not_the_scan():

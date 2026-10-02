@@ -214,6 +214,17 @@ class Viewport(BaseModel):
     height: int = Field(ge=200, le=10000)
 
 
+class CaptureSize(BaseModel):
+    """
+    The pixel size of the capture the panel will crop per finding.
+
+    Sent when the screenshot itself stays in the browser (hosted mode): the server never sees the image but
+    still decides whether a finding lies inside the capture, so it is told the size rather than guessing.
+    """
+    width: int = Field(ge=1, le=40000)
+    height: int = Field(ge=1, le=40000)
+
+
 class EvidenceBundle(BaseModel):
     # Unknown fields are ignored, not refused. The extension and the server are upgraded independently —
     # the extension by reloading it, the server by restarting a long-running process — so a newer
@@ -234,11 +245,17 @@ class EvidenceBundle(BaseModel):
     axe: AxeResult
     telemetry: Telemetry = Field(default_factory=Telemetry)
     interactions: List[InteractionRecord] = Field(default_factory=list)
+    # Accepted, but the extension does not send these: the captures stay in the browser, which attaches
+    # one to its own request to the AI provider and crops the other itself. A collector that does hand the
+    # server a capture - the Playwright one, the dashboard - still works, and that is what lets a
+    # self-hosted server produce the per-finding crops in aura/api/shots.py.
     screenshot_png_base64: Optional[str] = Field(default=None, max_length=MAX_SCREENSHOT_B64)
     screenshot_fullpage_png_base64: Optional[str] = Field(default=None, max_length=MAX_FULLPAGE_B64)
     # Where the reported elements sat on the page when the capture was taken, keyed by the selector the
     # finding will carry. Geometry only; used to crop the capture to a finding.
     target_boxes: Dict[str, Dict[str, float]] = Field(default_factory=dict, max_length=600)
+    # Set when the capture is not uploaded, so the boxes above can still be placed within it.
+    capture_size: Optional[CaptureSize] = None
     captured_at: Optional[str] = Field(default=None, max_length=64)
 
     @field_validator("url")
