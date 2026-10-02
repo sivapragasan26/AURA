@@ -33,6 +33,8 @@ class AuditStore:
             self._items.move_to_end(audit_id)
             while len(self._items) > self.max_items:
                 self._items.popitem(last=False)
+        if not settings.PERSIST:
+            return  # hosted: audits live in memory only, so no page content is written down
         try:
             run_dir = settings.RUNS_DIR / audit_id
             run_dir.mkdir(parents=True, exist_ok=True)

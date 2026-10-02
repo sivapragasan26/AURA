@@ -1,7 +1,11 @@
 import time
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional
-from playwright.sync_api import sync_playwright, Playwright, Browser, BrowserContext, Page
+from typing import Dict, Any, Tuple, Optional, TYPE_CHECKING
+# Playwright is imported lazily so the API can run without it. The extension collects its own
+# evidence in the browser, so the hosted API never drives Playwright and its image needs no
+# browser binaries; the Streamlit app and the Test Lab still use it locally.
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from playwright.sync_api import Playwright, Browser, BrowserContext, Page
 from aura.config import settings
 from aura.browser.runtime_collector import RuntimeCollector
 from aura.utils.logger import logger
@@ -12,14 +16,16 @@ class BrowserManager:
 
     def __init__(self, headless: bool = settings.BROWSER_HEADLESS):
         self.headless = headless
-        self._playwright: Optional[Playwright] = None
-        self._browser: Optional[Browser] = None
-        self._context: Optional[BrowserContext] = None
-        self._page: Optional[Page] = None
+        self._playwright: Optional["Playwright"] = None
+        self._browser: Optional["Browser"] = None
+        self._context: Optional["BrowserContext"] = None
+        self._page: Optional["Page"] = None
         self.collector = RuntimeCollector()
 
     def start(self, viewport: Dict[str, int]):
         """Starts Playwright browser session with specified viewport."""
+        from playwright.sync_api import sync_playwright
+
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(
             headless=self.headless,
@@ -79,7 +85,7 @@ class BrowserManager:
         return str(viewport_path), str(fullpage_path)
 
     @property
-    def page(self) -> Page:
+    def page(self) -> "Page":
         if not self._page:
             raise RuntimeError("Page is not active")
         return self._page

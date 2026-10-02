@@ -1,6 +1,11 @@
+from typing import TYPE_CHECKING
 from pathlib import Path
 from typing import Dict, Any, List
-from playwright.sync_api import Page
+# Playwright is imported lazily so the API can run without it. The extension collects its own
+# evidence in the browser, so the hosted API never drives Playwright and its image needs no
+# browser binaries; the Streamlit app and the Test Lab still use it locally.
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from playwright.sync_api import Page
 from aura.models.findings import ElementMetadata
 
 
@@ -10,7 +15,7 @@ class DOMAnalyzer:
     # Canonical extraction script, shared with the Chrome extension (see js/dom_extraction.js)
     DOM_EXTRACTION_SCRIPT = (Path(__file__).resolve().parent / "js" / "dom_extraction.js").read_text(encoding="utf-8")
 
-    def analyze(self, page: Page) -> Dict[str, Any]:
+    def analyze(self, page: "Page") -> Dict[str, Any]:
         """Analyzes DOM structure, layout geometry, and groups elements by category."""
         try:
             raw_res = page.evaluate(self.DOM_EXTRACTION_SCRIPT)

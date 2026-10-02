@@ -1,0 +1,25 @@
+# Render blueprint for the AURA API.
+#
+# AURA_API_TOKEN and AURA_ALLOWED_ORIGINS are NOT set here on purpose — set them in the Render
+# dashboard so they stay out of the repository. AURA_ALLOWED_HOSTS must name this service's own
+# hostname: the Host check is what stops a web page from driving the API, so it is never left open.
+services:
+  - type: web
+    name: aura-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: AURA_PERSIST
+        value: "0"
+      - key: AURA_API_HOST
+        value: 0.0.0.0
+      - key: AURA_ALLOWED_HOSTS
+        value: aura-api.onrender.com
+      - key: AI_PROVIDER
+        value: mock
+      - key: AURA_API_TOKEN
+        sync: false
+      - key: AURA_ALLOWED_ORIGINS
+        sync: false

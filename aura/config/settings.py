@@ -6,8 +6,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# PERSIST=0 keeps everything in memory: no audit records, no screenshots, no token file. A hosted
+# deployment runs this way, so page content from someone else's browser is never written down, and the
+# process starts even where the filesystem is read-only. Local installs default to persisting, which is
+# what the Test Lab, the benchmark and the per-finding screenshots rely on.
+PERSIST = os.getenv("AURA_PERSIST", "1").strip().lower() not in ("0", "false", "no")
+
 TEMP_DIR = BASE_DIR / "temp_screenshots"
-TEMP_DIR.mkdir(exist_ok=True)
+
+
+def ensure_dir(path: Path) -> bool:
+    """Creates a directory when persistence is on. Returns whether it is usable."""
+    if not PERSIST:
+        return False
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+ensure_dir(TEMP_DIR)
 
 # AI Provider Settings
 AI_PROVIDER = os.getenv("AI_PROVIDER", "mock").lower()
@@ -49,7 +69,7 @@ VIEWPORT_PRESETS = {
 TEST_LAB_DIR = BASE_DIR / "test_lab"
 TEST_LAB_PORT = int(os.getenv("TEST_LAB_PORT", "8999"))
 RUNS_DIR = BASE_DIR / "runs"
-RUNS_DIR.mkdir(exist_ok=True)
+ensure_dir(RUNS_DIR)
 
 PERMITTED_LOCAL_HOSTS = ["localhost", "127.0.0.1", f"127.0.0.1:{TEST_LAB_PORT}"]
 SAFETY_INTERACTION_ENABLED = True

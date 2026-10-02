@@ -1,0 +1,17 @@
+# Everything above, plus what only the local tooling needs.
+-r requirements.txt
+
+# Playwright drives the Test Lab benchmark and the Streamlit app. The API imports it lazily and never
+# launches a browser, so a hosted image can leave this out entirely.
+playwright>=1.40.0
+
+# The Streamlit dashboard (app.py). No module under aura/ imports it.
+streamlit>=1.30.0
+
+# The AI provider SDKs are used by the local engine. Once the extension calls providers directly these
+# are needed only for the Streamlit app and the benchmark.
+openai>=1.10.0
+google-genai>=0.1.0
+anthropic>=0.18.0
+
+pytest>=8.0.0

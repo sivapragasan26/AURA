@@ -1,7 +1,12 @@
+from typing import TYPE_CHECKING
 import urllib.request
 from pathlib import Path
 from typing import List, Dict, Any
-from playwright.sync_api import Page
+# Playwright is imported lazily so the API can run without it. The extension collects its own
+# evidence in the browser, so the hosted API never drives Playwright and its image needs no
+# browser binaries; the Streamlit app and the Test Lab still use it locally.
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from playwright.sync_api import Page
 from aura.models.findings import AccessibilityViolation
 from aura.utils.logger import logger
 
@@ -136,7 +141,7 @@ class AccessibilityAnalyzer:
             )
         return violations
 
-    def analyze(self, page: Page) -> List[AccessibilityViolation]:
+    def analyze(self, page: "Page") -> List[AccessibilityViolation]:
         violations: List[AccessibilityViolation] = []
         axe_js = self._load_axe_script()
 

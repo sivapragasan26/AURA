@@ -2,6 +2,7 @@ import base64
 import time
 import json
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, List
 from aura.config import settings
@@ -275,7 +276,11 @@ class AURAOrchestrator:
                 return None
             if not raw.startswith(PNG_SIGNATURE):
                 return None
-            path = str(settings.TEMP_DIR / f"extension_{audit_id}{suffix}.png")
+            # The analysis needs the bytes on disk for the provider call. When persistence is off that
+            # goes to the system temp dir, which exists even where the app directory is read-only, and is
+            # removed again in the finally block below.
+            directory = settings.TEMP_DIR if settings.PERSIST else Path(tempfile.gettempdir())
+            path = str(directory / f"extension_{audit_id}{suffix}.png")
             with open(path, "wb") as fh:
                 fh.write(raw)
             return path
@@ -320,7 +325,7 @@ class AURAOrchestrator:
             # The capture is kept with its audit so the panel can show a person WHERE a finding is, cropped
             # to the element in question. It stays on this machine: the local server serves it to the local
             # extension and nothing uploads it. It is removed from the temp area either way.
-            if keep_path:
+            if keep_path and settings.PERSIST:
                 try:
                     kept = settings.RUNS_DIR / audit_id
                     kept.mkdir(parents=True, exist_ok=True)
@@ -585,6 +590,8 @@ class AURAOrchestrator:
 
     def save_audit_run(self, audit_id: str, report_data: Dict[str, Any]):
         """Persists audit run data locally to runs/<audit_id>/audit.json."""
+        if not settings.PERSIST:
+            return  # hosted: nothing about someone else's page is written down
         try:
             run_dir = settings.RUNS_DIR / audit_id
             run_dir.mkdir(parents=True, exist_ok=True)
