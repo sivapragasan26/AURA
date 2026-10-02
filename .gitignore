@@ -46,3 +46,7 @@ scratch/
 
 # Local agent/session state
 .claude/
+
+# This machine's .env.example holds real provider settings, including a live API key.
+# The committed template is .env.sample instead.
+.env.example
