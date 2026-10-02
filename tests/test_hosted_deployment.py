@@ -212,3 +212,76 @@ def test_the_entry_point_binds_locally_by_default():
     assert 'os.getenv("PORT")' in main, "a hosted platform injects PORT"
     # The pairing token must not reach a hosted platform's log stream.
     assert "if local:" in main
+
+
+# ---------------------------------------------------------------------------------------------------
+# Per-install tokens: a hosted service with no pairing step
+# ---------------------------------------------------------------------------------------------------
+SERVER_TOKEN = "server-side-token-aaaaaaaaaaaaaaaaaaaa"
+EXT_ORIGIN = {"Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop"}
+
+
+@pytest.fixture
+def api():
+    from starlette.testclient import TestClient
+    from aura.api.server import create_app
+    return TestClient(create_app(token=SERVER_TOKEN, store=AuditStore()), base_url="http://127.0.0.1:8765")
+
+
+def _paired(client, token):
+    return client.get("/api/health", headers={**EXT_ORIGIN, "X-AURA-Token": token}).json().get("paired")
+
+
+def test_an_install_can_get_its_own_token_without_pairing(api):
+    r = api.post("/api/register", headers=EXT_ORIGIN)
+    assert r.status_code == 200
+    token = r.json()["token"]
+    assert token.startswith(security.INSTALL_TOKEN_PREFIX + ".")
+    assert _paired(api, token) is True
+
+
+def test_the_servers_own_token_keeps_working(api):
+    """Self-hosters and local installs still paste one token; that path is untouched."""
+    assert _paired(api, SERVER_TOKEN) is True
+
+
+def test_a_forged_install_token_is_refused(api):
+    forged = f"{security.INSTALL_TOKEN_PREFIX}.someinstallid.{'0' * 32}"
+    assert _paired(api, forged) is False
+    assert _paired(api, "") is False
+    assert _paired(api, "not-a-token") is False
+    assert _paired(api, f"{security.INSTALL_TOKEN_PREFIX}.only-two-parts") is False
+
+
+def test_a_token_from_another_server_is_refused(api):
+    """Signed under this server's secret only, so a token cannot be carried between deployments."""
+    from starlette.testclient import TestClient
+    from aura.api.server import create_app
+
+    issued = api.post("/api/register", headers=EXT_ORIGIN).json()["token"]
+    other = TestClient(create_app(token="a-different-server-token-bbbbbbbbbbbb", store=AuditStore()),
+                       base_url="http://127.0.0.1:8765")
+    assert _paired(other, issued) is False
+
+
+def test_an_install_token_survives_a_restart():
+    """
+    The server remembers nothing, so a host that sleeps and restarts does not log every extension out.
+    Verification is a signature check, which is why this works with a fresh process and across instances.
+    """
+    issued = security.issue_install_token(SERVER_TOKEN)
+    assert security.install_token_valid(SERVER_TOKEN, issued)      # a brand-new process would agree
+    assert not security.install_token_valid("another-secret-entirely", issued)
+
+
+def test_registration_is_rate_limited(api):
+    """It takes no token by design, so it must not be an unbounded tap."""
+    attempts = security.__dict__.get("REGISTRATIONS_PER_HOUR", 20) + 5
+    codes = {api.post("/api/register", headers=EXT_ORIGIN).status_code for _ in range(attempts)}
+    assert 429 in codes, "registration must be capped per client"
+
+
+def test_registration_still_requires_an_allowed_origin(api):
+    """No token does not mean no checks: a web page must not be able to mint one."""
+    r = api.post("/api/register", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403

@@ -4,6 +4,7 @@ AURA local API: the boundary between the Chrome extension (primary product) and 
     Chrome extension (side panel) --HTTP, 127.0.0.1 + pairing token--> this API --> AURAOrchestrator.analyze_evidence
 
 Endpoints
+  POST /api/register                                 issues this install its own token (no pairing step)
   GET  /api/health                                   engine + provider status (no secrets); `paired` if token valid
   POST /api/interaction-plan                         live-session interaction plan (policy is enforced HERE)
   POST /api/audits                                   analyse an EvidenceBundle -> audit view
@@ -16,6 +17,8 @@ AI concurrency is 1: every AI-using request is serialized by one lock (provider 
 """
 import json
 import threading
+import time
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import ValidationError
@@ -49,6 +52,27 @@ MAX_PLAN_ELEMENTS = 400
 # One AI request at a time across the whole server (sequential AI execution)
 AI_LOCK = threading.Lock()
 
+# Registration needs no token, so it is capped per client address. In memory and bounded: losing it on a
+# restart only lets a client register again, which is harmless.
+REGISTRATIONS_PER_HOUR = 20
+_REGISTRATIONS: "OrderedDict[str, list]" = OrderedDict()
+_REGISTRATION_LOCK = threading.Lock()
+
+
+def _registration_allowed(client: str) -> bool:
+    now = time.time()
+    with _REGISTRATION_LOCK:
+        seen = [t for t in _REGISTRATIONS.get(client, []) if now - t < 3600]
+        if len(seen) >= REGISTRATIONS_PER_HOUR:
+            _REGISTRATIONS[client] = seen
+            return False
+        seen.append(now)
+        _REGISTRATIONS[client] = seen
+        _REGISTRATIONS.move_to_end(client)
+        while len(_REGISTRATIONS) > 2048:
+            _REGISTRATIONS.popitem(last=False)
+        return True
+
 # Provider selection lives here, in the server process. The extension picks a provider and may hand over an
 # API key once; the key never comes back out (see aura/api/provider_config.py).
 PROVIDERS = ProviderConfig()
@@ -81,7 +105,7 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
             return _error(403, "HOST_NOT_ALLOWED", "The AURA API only answers on the loopback interface.")
         if not security.origin_allowed(request.headers.get("origin"), allow_list):
             return _error(403, "ORIGIN_NOT_ALLOWED", "Requests from web pages are not accepted.")
-        if require_token and not security.token_matches(api_token, request.headers.get(security.TOKEN_HEADER)):
+        if require_token and not security.accepted(api_token, request.headers.get(security.TOKEN_HEADER)):
             return _error(401, "UNAUTHORIZED", "Missing or invalid pairing token. Paste the token printed by the AURA "
                                                "server into the extension's settings.")
         return None
@@ -98,6 +122,23 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         except ValueError:
             return None, _error(400, "INVALID_JSON", "Request body is not valid JSON.")
 
+    async def register(request: Request) -> JSONResponse:
+        """
+        Issues this install its own token, so a hosted service needs no pairing step.
+
+        Needs no token itself — that is the point — so it is rate limited per client and returns a token
+        that proves itself by signature rather than by anything the server remembers.
+        """
+        denied = guard(request, require_token=False)
+        if denied:
+            return denied
+        client = request.client.host if request.client else "unknown"
+        if not _registration_allowed(client):
+            return _error(429, "TOO_MANY_REGISTRATIONS",
+                          "Too many new installs from this address. Try again in a few minutes.")
+        return JSONResponse({"token": security.issue_install_token(api_token),
+                             "engine_version": ENGINE_VERSION, "api_version": API_VERSION})
+
     async def health(request: Request) -> JSONResponse:
         denied = guard(request, require_token=False)
         if denied:
@@ -109,7 +150,7 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
             "status": "ok",
             "engine_version": ENGINE_VERSION,
             "api_version": API_VERSION,
-            "paired": security.token_matches(api_token, request.headers.get(security.TOKEN_HEADER)),
+            "paired": security.accepted(api_token, request.headers.get(security.TOKEN_HEADER)),
             "ai": {"provider": provider_key, "label": PROVIDER_LABELS.get(provider_key, provider_key),
                    "is_mock": provider_key == "mock",
                    "model": getattr(provider, "model", model), "configured": pf.status != "NOT_CONFIGURED",
@@ -294,6 +335,7 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
 
     routes = [
         Route("/api/health", health, methods=["GET"]),
+        Route("/api/register", register, methods=["POST"]),
         Route("/api/providers", list_providers, methods=["GET"]),
         Route("/api/providers/select", select_provider, methods=["POST"]),
         Route("/api/providers/test", test_provider, methods=["POST"]),

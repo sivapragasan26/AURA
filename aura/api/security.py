@@ -9,6 +9,7 @@ the user visits (they could otherwise POST to localhost), so every /api request 
   - the pairing token in the X-AURA-Token header (except GET /api/health, which reveals no secrets).
 AI provider API keys never leave the server: no endpoint returns them and the extension never sends them.
 """
+import hashlib
 import hmac
 import os
 import secrets
@@ -62,6 +63,46 @@ def load_or_create_token(path: Optional[Path] = None) -> str:
 
 def token_matches(expected: str, supplied: Optional[str]) -> bool:
     return bool(supplied) and hmac.compare_digest(expected.encode("utf-8"), supplied.encode("utf-8"))
+
+
+# ---------------------------------------------------------------------------------------------------
+# Per-install tokens
+#
+# A local install has one pairing token the user pastes once. A hosted service cannot: a single shared
+# token would have to be published to be usable, which makes it no token at all. Instead each extension
+# install asks for its own on first run, so there is no pairing step for the user at all.
+#
+# The token carries its own proof — an install id plus an HMAC of it under the server secret — so the
+# server stores nothing. That matters on a host that sleeps and restarts: an in-memory list of issued
+# tokens would be lost and every extension would be logged out, whereas a signed token keeps working
+# across restarts and across instances.
+# ---------------------------------------------------------------------------------------------------
+INSTALL_TOKEN_PREFIX = "ai1"
+
+
+def _signing_secret(api_token: str) -> bytes:
+    """Derived from AURA_TOKEN_SECRET, else from the server token, so there is nothing extra to configure."""
+    return (os.getenv("AURA_TOKEN_SECRET", "").strip() or api_token).encode("utf-8")
+
+
+def issue_install_token(api_token: str) -> str:
+    install_id = secrets.token_urlsafe(16)
+    digest = hmac.new(_signing_secret(api_token), install_id.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{INSTALL_TOKEN_PREFIX}.{install_id}.{digest[:32]}"
+
+
+def install_token_valid(api_token: str, supplied: Optional[str]) -> bool:
+    parts = (supplied or "").split(".")
+    if len(parts) != 3 or parts[0] != INSTALL_TOKEN_PREFIX:
+        return False
+    _, install_id, signature = parts
+    expected = hmac.new(_signing_secret(api_token), install_id.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected[:32], signature)
+
+
+def accepted(api_token: str, supplied: Optional[str]) -> bool:
+    """The server's own token (local install, self-hosters) or a validly signed per-install token."""
+    return token_matches(api_token, supplied) or install_token_valid(api_token, supplied)
 
 
 def allowed_origins() -> list:
