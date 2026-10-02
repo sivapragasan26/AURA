@@ -3,7 +3,9 @@
 
 # Playwright drives the Test Lab benchmark and the Streamlit app. The API imports it lazily and never
 # launches a browser, so a hosted image can leave this out entirely.
-playwright>=1.40.0
+# Pinned: each release wants its own browser build, and an unpinned upgrade leaves every browser test
+# failing with "Executable doesn't exist" until the new build is downloaded.
+playwright==1.62.0
 
 # The Streamlit dashboard (app.py). No module under aura/ imports it.
 streamlit>=1.30.0
