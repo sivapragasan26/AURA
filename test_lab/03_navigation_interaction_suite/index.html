@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURA Benchmark - Navigation & Interaction Suite</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 0; background: #f8f9fa; }
+        header { background: #212529; color: white; padding: 1rem 2rem; }
+        nav { display: flex; gap: 20px; align-items: center; }
+        nav a { color: #f8f9fa; text-decoration: none; padding: 8px 12px; border-radius: 4px; }
+        nav a:hover { background: #343a40; }
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-menu { display: none; position: absolute; background: white; box-shadow: 0 4px 8px rgba(0,0,0,0.1); min-width: 160px; z-index: 100; }
+        .dropdown-menu a { color: #333; display: block; padding: 10px; }
+        main { max-width: 900px; margin: 3rem auto; background: white; padding: 2rem; border-radius: 8px; }
+        .btn-action { background: #0d6efd; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+        .btn-dead { background: #198754; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <header>
+        <nav id="nav-bad-links">
+            <span style="font-weight: bold; font-size: 1.2rem; margin-right: 20px;">FinTech Admin</span>
+            <!-- TEST A: Overlapping/bad navigation links -->
+            <a href="javascript:void(0)" style="margin-right: -30px; position: relative; z-index: 2;">Dashboard</a>
+            <a href="javascript:void(0)" style="margin-right: 15px;">Transactions</a>
+            
+            <!-- TEST C: Broken Menu Toggle -->
+            <div id="nav-broken-menu" class="dropdown">
+                <button style="background: #495057; color: white; border: none; padding: 8px 12px; cursor: pointer;">Settings ▾</button>
+                <div class="dropdown-menu">
+                    <!-- Menu stays hidden even when toggle button clicked -->
+                    <a href="#">Security</a>
+                    <a href="#">Preferences</a>
+                </div>
+            </div>
+
+            <!-- TEST E: Misleading CTA destination -->
+            <a id="nav-misleading-cta" href="javascript:void(0)" style="margin-left: auto; color: #ffc107;">Download Full Invoice PDF</a>
+        </nav>
+    </header>
+
+    <main>
+        <h2>Financial Statement & Account Operations</h2>
+        <p>Perform automated balance transfers and request instant audit reports.</p>
+
+        <div style="margin: 2rem 0; display: flex; gap: 20px;">
+            <!-- TEST B: Unresponsive Click Button throwing error -->
+            <button id="interaction-broken-btn" class="btn-action">Execute Balance Transfer</button>
+            
+            <!-- TEST D: Dead Button doing nothing -->
+            <button id="interaction-dead-btn" class="btn-dead">Generate Instant Audit Report</button>
+        </div>
+
+        <!-- TEST F: Failed Form Interaction -->
+        <div id="interaction-form-failed" style="margin-top: 3rem; background: #e9ecef; padding: 1.5rem; border-radius: 6px;">
+            <h3>Quick Support Ticket Submission</h3>
+            <form id="support-form">
+                <div style="margin-bottom: 1rem;">
+                    <input type="text" id="ticket-desc" placeholder="Describe issue details..." style="width: 80%; padding: 8px;">
+                </div>
+                <button type="submit" style="background: #333; color: white; padding: 8px 16px; border: none;">Submit Ticket</button>
+                <span id="form-feedback" style="display: none; margin-left: 10px;"></span>
+            </form>
+        </div>
+    </main>
+
+    <script>
+        // TEST B JS listener throwing exception
+        document.getElementById('interaction-broken-btn').addEventListener('click', function() {
+            throw new Error("Uncaught Interaction Error: Unable to complete operation on element #interaction-broken-btn");
+        });
+
+        // TEST F Form Submit listener clearing without feedback
+        document.getElementById('support-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            document.getElementById('ticket-desc').value = '';
+            // No feedback message set
+        });
+    </script>
+</body>
+</html>
+

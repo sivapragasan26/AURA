@@ -1,0 +1,86 @@
+{
+    "suite_id": "04_responsive_runtime_suite",
+    "name": "Consolidated Responsive & Runtime Benchmark Suite",
+    "description": "Web page featuring horizontal document overflow, mobile layout breaks, console exceptions, and network errors",
+    "version": "0.4.4",
+    "expected_findings": [
+        {
+            "ground_truth_id": "GT-RESP-001",
+            "suite_id": "04_responsive_runtime_suite",
+            "category": "RESPONSIVENESS",
+            "normalized_rule": "horizontal_overflow",
+            "rule": "horizontal_overflow",
+            "severity": "HIGH",
+            "target": "#responsive-overflow",
+            "description": "Document scrollWidth exceeds viewport width, causing horizontal layout overflow",
+            "verification_method": "scroll_width_geometry",
+            "expected_evidence": ["dom", "visual"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-RESP-002",
+            "suite_id": "04_responsive_runtime_suite",
+            "category": "RESPONSIVENESS",
+            "normalized_rule": "unusable_mobile_form",
+            "rule": "mobile_layout_break",
+            "severity": "MEDIUM",
+            "target": "#responsive-mobile-break",
+            "description": "Unresponsive wide table breaks layout structure on narrow viewports",
+            "verification_method": "viewport_bounding_box",
+            "expected_evidence": ["dom", "visual"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-RESP-003",
+            "suite_id": "04_responsive_runtime_suite",
+            "category": "RESPONSIVENESS",
+            "normalized_rule": "clipped_content",
+            "rule": "clipped_content",
+            "severity": "MEDIUM",
+            "target": "#responsive-clipped-content",
+            "description": "Container overflow property causes critical text content to be clipped",
+            "verification_method": "geometry_bounding_box",
+            "expected_evidence": ["dom", "visual"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-RUN-001",
+            "suite_id": "04_responsive_runtime_suite",
+            "category": "RUNTIME",
+            "normalized_rule": "console_error",
+            "rule": "application_console_error",
+            "severity": "HIGH",
+            "target": "window",
+            "description": "Uncaught application console error emitted during page load",
+            "verification_method": "browser_console_telemetry",
+            "expected_evidence": ["runtime"],
+            "allowed_sources": ["RUNTIME"]
+        },
+        {
+            "ground_truth_id": "GT-RUN-002",
+            "suite_id": "04_responsive_runtime_suite",
+            "category": "RUNTIME",
+            "normalized_rule": "runtime_exception",
+            "rule": "application_runtime_exception",
+            "severity": "CRITICAL",
+            "target": "window",
+            "description": "Uncaught JavaScript ReferenceError during initial script execution",
+            "verification_method": "browser_exception_telemetry",
+            "expected_evidence": ["runtime"],
+            "allowed_sources": ["RUNTIME"]
+        },
+        {
+            "ground_truth_id": "GT-RUN-003",
+            "suite_id": "04_responsive_runtime_suite",
+            "category": "RUNTIME",
+            "normalized_rule": "api_failure",
+            "rule": "application_network_failure",
+            "severity": "HIGH",
+            "target": "/api/v1/application-status-500",
+            "description": "HTTP GET request to backend status endpoint returned HTTP 500 Internal Server Error",
+            "verification_method": "network_status_telemetry",
+            "expected_evidence": ["runtime"],
+            "allowed_sources": ["RUNTIME"]
+        }
+    ]
+}

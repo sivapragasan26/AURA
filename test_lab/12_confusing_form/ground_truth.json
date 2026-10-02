@@ -1,0 +1,13 @@
+{
+  "site_id": "12_confusing_form",
+  "name": "Confusing Form Usability",
+  "description": "Button labeled 'Submit Form' actually triggers form reset, wiping user input.",
+  "expected_findings": [
+    {
+      "category": "UX",
+      "type": "form_usability",
+      "severity": "HIGH"
+    }
+  ]
+}
+

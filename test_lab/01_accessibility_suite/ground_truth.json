@@ -1,0 +1,86 @@
+{
+    "suite_id": "01_accessibility_suite",
+    "name": "Consolidated Accessibility Benchmark Suite",
+    "description": "Realistic portal containing multiple WCAG accessibility defects",
+    "version": "0.4.4",
+    "expected_findings": [
+        {
+            "ground_truth_id": "GT-A11Y-001",
+            "suite_id": "01_accessibility_suite",
+            "category": "ACCESSIBILITY",
+            "normalized_rule": "image-alt",
+            "rule": "image-alt",
+            "severity": "MEDIUM",
+            "target": "#a11y-missing-alt",
+            "description": "Image missing descriptive alt attribute",
+            "verification_method": "axe_core_dom_attribute",
+            "expected_evidence": ["accessibility", "dom"],
+            "allowed_sources": ["AXE_CORE", "AI"]
+        },
+        {
+            "ground_truth_id": "GT-A11Y-002",
+            "suite_id": "01_accessibility_suite",
+            "category": "ACCESSIBILITY",
+            "normalized_rule": "button-name",
+            "rule": "button-name",
+            "severity": "HIGH",
+            "target": "#a11y-button-name",
+            "description": "Button element lacks accessible name or label",
+            "verification_method": "axe_core_accessible_name",
+            "expected_evidence": ["accessibility", "dom"],
+            "allowed_sources": ["AXE_CORE", "AI"]
+        },
+        {
+            "ground_truth_id": "GT-A11Y-003",
+            "suite_id": "01_accessibility_suite",
+            "category": "ACCESSIBILITY",
+            "normalized_rule": "color-contrast",
+            "rule": "color-contrast",
+            "severity": "MEDIUM",
+            "target": "#a11y-contrast",
+            "description": "Low text contrast ratio against background color",
+            "verification_method": "axe_core_contrast_ratio",
+            "expected_evidence": ["accessibility", "visual"],
+            "allowed_sources": ["AXE_CORE", "AI"]
+        },
+        {
+            "ground_truth_id": "GT-A11Y-004",
+            "suite_id": "01_accessibility_suite",
+            "category": "ACCESSIBILITY",
+            "normalized_rule": "bad_links",
+            "rule": "bad_links",
+            "severity": "MEDIUM",
+            "target": "#a11y-bad-link",
+            "description": "Link element has empty or non-functional placeholder href",
+            "verification_method": "dom_attribute_href",
+            "expected_evidence": ["dom", "interaction"],
+            "allowed_sources": ["AXE_CORE", "AI"]
+        },
+        {
+            "ground_truth_id": "GT-A11Y-005",
+            "suite_id": "01_accessibility_suite",
+            "category": "ACCESSIBILITY",
+            "normalized_rule": "landmark-one-main",
+            "rule": "landmark-one-main",
+            "severity": "MEDIUM",
+            "target": "body",
+            "description": "Page structure lacks main landmark region",
+            "verification_method": "axe_core_landmark_inspection",
+            "expected_evidence": ["accessibility", "dom"],
+            "allowed_sources": ["AXE_CORE", "AI"]
+        },
+        {
+            "ground_truth_id": "GT-A11Y-006",
+            "suite_id": "01_accessibility_suite",
+            "category": "ACCESSIBILITY",
+            "normalized_rule": "label",
+            "rule": "label",
+            "severity": "HIGH",
+            "target": "#a11y-missing-label",
+            "description": "Form input field missing associated label element",
+            "verification_method": "axe_core_form_label",
+            "expected_evidence": ["accessibility", "dom"],
+            "allowed_sources": ["AXE_CORE", "AI"]
+        }
+    ]
+}

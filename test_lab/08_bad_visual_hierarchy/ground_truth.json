@@ -1,0 +1,13 @@
+{
+  "site_id": "08_bad_visual_hierarchy",
+  "name": "Weak Primary Action Hierarchy",
+  "description": "Primary CTA is visually diminished relative to secondary actions causing user confusion.",
+  "expected_findings": [
+    {
+      "category": "UX",
+      "type": "visual_hierarchy",
+      "severity": "HIGH"
+    }
+  ]
+}
+

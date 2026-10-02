@@ -1,0 +1,13 @@
+{
+  "site_id": "13_interaction_failure",
+  "name": "Broken Interaction Button",
+  "description": "Button throws unhandled JS exception upon click interaction.",
+  "expected_findings": [
+    {
+      "category": "UX",
+      "type": "interaction_failure",
+      "severity": "HIGH"
+    }
+  ]
+}
+

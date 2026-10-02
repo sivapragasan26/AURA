@@ -1,0 +1,13 @@
+{
+  "site_id": "03_bad_contrast",
+  "name": "Low Contrast Text",
+  "description": "Text element with color #EEEEEE on white background (axe-core color-contrast violation).",
+  "expected_findings": [
+    {
+      "category": "ACCESSIBILITY",
+      "rule": "color-contrast",
+      "severity": "SERIOUS"
+    }
+  ]
+}
+

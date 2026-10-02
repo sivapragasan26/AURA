@@ -1,0 +1,13 @@
+{
+  "site_id": "09_runtime_errors",
+  "name": "JavaScript Runtime Exception",
+  "description": "Fires unhandled JS exception on page initialization.",
+  "expected_findings": [
+    {
+      "category": "RUNTIME",
+      "rule": "APPLICATION_ERROR",
+      "severity": "HIGH"
+    }
+  ]
+}
+

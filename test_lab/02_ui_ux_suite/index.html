@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURA Benchmark - UI & UX Suite</title>
+    <style>
+        body { font-family: Comic Sans MS, cursive, sans-serif; margin: 0; padding: 0; background: #fafafa; color: #222; }
+        header { background: #333; color: white; padding: 1.5rem; }
+        main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+        .hero { background: #eef2f5; padding: 4rem 2rem; border-radius: 12px; margin-bottom: 2rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        .card { background: white; padding: 2rem; border-radius: 8px; border: 1px solid #ddd; }
+        .btn-giant-red { background: #dc3545; color: white; font-size: 24px; padding: 20px 40px; border: none; cursor: pointer; border-radius: 8px; }
+        .link-tiny-primary { color: #888; font-size: 11px; text-decoration: underline; margin-left: 20px; }
+        .error-banner { background: #fff3cd; color: #856404; padding: 12px; border: 1px solid #ffeeba; border-radius: 4px; margin-bottom: 1.5rem; font-family: monospace; }
+        .inconsistent-btn { background: green; color: yellow; font-family: Impact; font-size: 18px; padding: 5px 15px; border-radius: 20px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 style="margin: 0; font-size: 1.8rem;">CloudCommerce Workflow Dashboard</h1>
+    </header>
+
+    <main>
+        <!-- TEST F: Unclear Error Message UX -->
+        <div id="ux-unclear-error" class="error-banner">
+            STATUS 500: FATAL SYSTEM EXCEPTION 0x8004005 IN DB_WORKER. THREAD ABORTED. CONTACT ADMINISTRATOR.
+        </div>
+
+        <div class="hero">
+            <h2>Order Processing & Customer Management</h2>
+            <p>Manage pending subscription upgrades and cloud infrastructure provisioning.</p>
+            
+            <!-- TEST A & D: Bad Visual Hierarchy & Weak CTA -->
+            <div id="ui-visual-hierarchy" style="margin-top: 2rem;">
+                <button class="btn-giant-red">Cancel All Pending Orders</button>
+                <a id="ui-weak-cta" href="#" class="link-tiny-primary">Submit Final Order Approval</a>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- TEST B: Confusing Form Usability -->
+            <div id="ux-confusing-form" class="card">
+                <h3>Subscription Order Details</h3>
+                <form>
+                    <p style="font-size: 0.85rem; color: #555;">Fill in attributes below:</p>
+                    <div style="margin-bottom: 1rem;">
+                        <input type="text" placeholder="Field A (Required / Optional?)" style="width: 90%; padding: 8px;">
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <input type="text" placeholder="Custom Token Key" style="width: 90%; padding: 8px;">
+                    </div>
+                    <div>
+                        <!-- Confusing Form Buttons: Reset looks like primary submit -->
+                        <input type="reset" value="Submit Form" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+                        <input type="submit" value="Reset Fields" style="background: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+                    </div>
+                </form>
+            </div>
+
+            <!-- TEST C & E: Poor Information Density & Inconsistent Components -->
+            <div id="ui-poor-density" class="card">
+                <h3>System Logs & Audit Notes</h3>
+                <!-- TEST E: Inconsistent Components -->
+                <div id="ui-inconsistent-components" style="margin-bottom: 1rem;">
+                    <button class="inconsistent-btn">Legacy Export</button>
+                    <button style="background: cyan; color: darkblue; border: 3px dashed magenta;">Modern Download</button>
+                </div>
+                <div style="font-size: 9px; line-height: 1.1; height: 180px; overflow-y: scroll; background: #eee; padding: 10px;">
+                    Log item 1002938102938102938102938102938102938102938102938102938...<br>
+                    Log item 1002938102938102938102938102938102938102938102938102938...<br>
+                    Log item 1002938102938102938102938102938102938102938102938102938...<br>
+                    Log item 1002938102938102938102938102938102938102938102938102938...<br>
+                    Log item 1002938102938102938102938102938102938102938102938102938...<br>
+                    Log item 1002938102938102938102938102938102938102938102938102938...
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
+

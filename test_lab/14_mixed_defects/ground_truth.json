@@ -1,0 +1,28 @@
+{
+  "site_id": "14_mixed_defects",
+  "name": "Multi-Category Mixed Defects",
+  "description": "Contains accessibility contrast/image-alt/button-name violations and runtime console error.",
+  "expected_findings": [
+    {
+      "category": "ACCESSIBILITY",
+      "rule": "color-contrast",
+      "severity": "SERIOUS"
+    },
+    {
+      "category": "ACCESSIBILITY",
+      "rule": "image-alt",
+      "severity": "CRITICAL"
+    },
+    {
+      "category": "ACCESSIBILITY",
+      "rule": "button-name",
+      "severity": "CRITICAL"
+    },
+    {
+      "category": "RUNTIME",
+      "rule": "APPLICATION_ERROR",
+      "severity": "HIGH"
+    }
+  ]
+}
+

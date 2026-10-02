@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Site 14 - Mixed Defects</title>
+</head>
+<body>
+    <header>
+        <h1>AURA Test Site 14: Multi-Category Mixed Defects</h1>
+    </header>
+    <main>
+        <p style="color: #EEEEEE;">Low contrast description paragraph.</p>
+        <img id="unlabelled-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='50' height='50'></svg>">
+        <button id="unlabelled-btn"></button>
+    </main>
+    <script>
+        console.error("Uncaught TypeError: Failed mixed defect execution");
+    </script>
+</body>
+</html>
+

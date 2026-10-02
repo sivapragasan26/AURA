@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Site 10 - Network Failures</title>
+</head>
+<body>
+    <main>
+        <h1>AURA Test Site 10: Network API 500 Failure</h1>
+        <p>This page triggers a failed HTTP fetch request on load.</p>
+    </main>
+    <script>
+        fetch('/api/v1/nonexistent-failing-endpoint')
+            .catch(err => console.error("Network failure fetching API: 500 Internal Server Error", err));
+    </script>
+</body>
+</html>
+

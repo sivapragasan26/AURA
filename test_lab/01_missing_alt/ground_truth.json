@@ -1,0 +1,13 @@
+{
+  "site_id": "01_missing_alt",
+  "name": "Missing Image Alt Text",
+  "description": "Contains an img tag missing alt attribute (axe-core image-alt violation).",
+  "expected_findings": [
+    {
+      "category": "ACCESSIBILITY",
+      "rule": "image-alt",
+      "severity": "CRITICAL"
+    }
+  ]
+}
+

@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+env/
+venv/
+ENV/
+
+# Environment variables
+.env
+
+# Screenshots / Temp files
+*.png
+*.jpeg
+*.jpg
+temp_screenshots/
+reports/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+
+# AURA local API pairing token
+.aura_api_token
+
+# AURA local API pairing token (second copy, written next to the server)
+pairing_token
+
+# Audit output: page URLs, titles, captured text and screenshots of pages that were scanned.
+# This is browsing history, not source. It stays on the machine that produced it.
+runs/
+
+# Ad-hoc experiment scripts, not part of the product
+scratch/
+
+# Local agent/session state
+.claude/

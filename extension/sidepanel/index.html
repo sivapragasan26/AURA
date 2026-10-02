@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AURA</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="../icons/icon32.png" alt="" width="22" height="22">
+      <div>
+        <div class="brand-name">AURA</div>
+        <div class="brand-sub">Autonomous UI/UX Assurance</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <span id="conn" class="pill pill-muted" title="AURA server status">Checking…</span>
+      <button id="settings" class="icon-btn" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L11 21h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- Scan -->
+    <section class="card scan-card">
+      <div class="label-row"><span class="section-label">Current page</span></div>
+      <div id="page-host" class="page-host">Current tab</div>
+      <p id="access" class="access access-pending" role="status">Checking access to this tab…</p>
+      <button id="scan" class="btn-primary" disabled>Scan current page</button>
+
+      <div class="ai-row">
+        <span class="section-label">AI</span>
+        <span id="ai-provider" class="ai-provider">Mock AI · Demo</span>
+        <button id="provider-toggle" class="link-btn small">Change</button>
+      </div>
+      <div class="options">
+        <label class="toggle"><input type="checkbox" id="opt-ai" checked><span></span>AI analysis</label>
+        <label class="toggle" title="AURA clicks up to 5 harmless controls (never submits forms, types, navigates or presses destructive buttons)">
+          <input type="checkbox" id="opt-interact"><span></span>Safe interaction test</label>
+      </div>
+      <details class="fineprint">
+        <summary>What AURA sends</summary>
+        <p id="privacy" class="fine">Evidence from this page (structure, visible text snippets, one screenshot) is sent to your local AURA server. With AI on, a focused evidence packet is sent to the AI provider you selected.</p>
+      </details>
+    </section>
+
+    <!-- Provider settings -->
+    <section id="provider-card" class="card hidden">
+      <div class="card-head"><strong>AI provider</strong><button id="provider-close" class="link-btn small">Done</button></div>
+      <label class="field"><span>Provider</span>
+        <select id="provider-select"></select>
+      </label>
+      <label class="field" id="provider-model-field"><span>Model</span>
+        <input id="provider-model" type="text" spellcheck="false" autocomplete="off" list="provider-models">
+        <datalist id="provider-models"></datalist>
+      </label>
+      <label class="field" id="provider-key-field"><span>API key</span>
+        <input id="provider-key" type="password" autocomplete="off" spellcheck="false" placeholder="Stored on your local AURA server only">
+      </label>
+      <div class="row">
+        <button id="provider-save" class="btn">Save</button>
+        <button id="provider-test" class="btn">Test connection</button>
+      </div>
+      <p id="provider-status" class="fine" role="status"></p>
+      <p class="fine">Keys are kept by the AURA server on this machine, never in the extension, never in findings. Changing the provider applies to your next scan.</p>
+    </section>
+
+    <!-- Scanning -->
+    <section id="progress" class="card hidden" aria-live="polite">
+      <div class="status-row"><span class="spinner" aria-hidden="true"></span><strong id="progress-title">Scanning…</strong></div>
+      <p class="fine">Collecting evidence from this page, then verifying it.</p>
+      <details class="more slim">
+        <summary>Technical processing</summary>
+        <ol id="steps" class="steps"></ol>
+      </details>
+    </section>
+
+    <!-- Error -->
+    <section id="error" class="card error-card hidden" role="alert">
+      <strong id="error-title">Scan failed</strong>
+      <p id="error-msg"></p>
+    </section>
+
+    <!-- No audit for this tab -->
+    <section id="no-audit" class="card no-audit hidden" role="status">
+      <p id="no-audit-msg"></p>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="hidden">
+      <div id="state-banner" class="banner"></div>
+
+      <section class="card score-card">
+        <div class="label-row"><span class="section-label">AURA score</span>
+          <button id="score-why" class="link-btn small">Why these scores?</button></div>
+        <div class="score-main"><span id="score-aura" class="score-value">–</span><span class="score-max">/ 100</span></div>
+        <div class="scores" id="scores"></div>
+        <div id="score-help" class="help hidden"></div>
+        <p id="score-note" class="fine"></p>
+      </section>
+
+      <section class="findings-section">
+        <div class="label-row"><span class="section-label">Findings</span><span id="list-filter" class="muted"></span></div>
+        <div class="sev-row" id="sev-row" role="group" aria-label="Filter findings"></div>
+        <ul id="findings" class="findings"></ul>
+      </section>
+
+      <details class="more" id="rejected-box">
+        <summary>Checked and dismissed <span id="rejected-count" class="count"></span></summary>
+        <p class="fine">AI suggestions that AURA's verifier contradicted or found immaterial. They are <b>not</b> reported as problems.</p>
+        <ul id="rejected" class="plain-list"></ul>
+      </details>
+      <details class="more">
+        <summary>Evidence collected <span id="coverage-pct" class="count"></span></summary>
+        <ul id="coverage" class="checklist"></ul>
+        <button id="coverage-why" class="link-btn small">What does this mean?</button>
+        <div id="coverage-help" class="help hidden">
+          <p>AURA verifies findings against the evidence it managed to collect. When something is missing, claims that would
+          need it stay <b>Uncertain</b> instead of being confirmed.</p>
+        </div>
+      </details>
+      <details class="more">
+        <summary>Scan details</summary>
+        <ul id="scan-meta" class="plain-list"></ul>
+      </details>
+    </section>
+
+    <!-- Finding detail -->
+    <section id="detail" class="hidden">
+      <button id="back" class="link-btn">← All findings</button>
+      <div class="card detail-card">
+        <div class="badges" id="d-badges"></div>
+        <h2 id="d-title"></h2>
+        <div id="d-status" class="status-line"></div>
+
+        <!-- The card says what the problem is in one short sentence. Everything else lives behind a
+             button: the full plain-language story in Explain, the engineering facts in Technical details. -->
+        <div class="detail-section"><p id="d-desc" class="lead"></p></div>
+
+        <p id="d-area-note" class="fine muted hidden"></p>
+        <div class="actions">
+          <button id="act-highlight" class="btn">Highlight</button>
+          <button id="act-shot" class="btn">Screenshot</button>
+          <button id="act-explain" class="btn">Explain</button>
+        </div>
+        <div id="act-out" class="act-out hidden" aria-live="polite"></div>
+
+        <details class="more" id="tech-details">
+          <summary>Technical details</summary>
+          <dl class="facts" id="d-facts"></dl>
+          <div id="d-affected-box" class="affected-box hidden">
+            <button id="d-affected-toggle" class="link-btn small">View affected elements</button>
+            <ul id="d-affected-list" class="plain-list hidden"></ul>
+          </div>
+          <div id="d-evidence-summary" class="fine">
+            <div id="d-ev-observation"></div>
+            <div id="d-ev-reproduction"></div>
+            <div id="d-ev-checklist"></div>
+            <div id="d-ev-conclusion" class="fine muted"></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card ask-card">
+        <div class="ask-head"><strong>Ask AURA</strong><span class="muted fine" id="ask-cost"></span></div>
+        <p id="ask-scope" class="fine muted"></p>
+        <div id="ask-log" class="ask-log"></div>
+        <form id="ask-form" class="ask-form">
+          <input id="ask-input" type="text" maxlength="500" placeholder="Why is this a problem?" autocomplete="off">
+          <button class="btn" type="submit">Ask</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="panel.js"></script>
+</body>
+</html>

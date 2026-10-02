@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaaS Portal - Enterprise Workspace</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background: #f7f9fa; color: #2c3e50; }
+        header { background: #2c3e50; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        nav a { color: #ecf0f1; text-decoration: none; margin-left: 15px; }
+        .hero { background: white; padding: 3rem 2rem; border-bottom: 1px solid #e1e8ed; text-align: center; }
+        .container { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+        .card { background: white; padding: 1.5rem; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+        .btn-cancel-giant { background: #e74c3c; color: white; font-size: 20px; padding: 15px 30px; border: none; border-radius: 4px; cursor: pointer; }
+        .link-tiny-save { color: #95a5a6; font-size: 10px; text-decoration: underline; margin-left: 15px; }
+        .overflow-strip { width: 1600px; background: #3498db; color: white; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <header>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <!-- TEST A: Missing Alt Image -->
+            <img id="mixed-missing-alt" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><circle cx='20' cy='20' r='18' fill='%233498db'/></svg>">
+            <span style="font-weight: bold; font-size: 1.2rem;">SaaS Cloud Workspace</span>
+        </div>
+        <!-- TEST D: Bad Navigation -->
+        <nav id="mixed-bad-nav">
+            <a href="javascript:void(0)">Overview</a>
+            <a href="javascript:void(0)" style="margin-left: -20px; position: relative;">Settings</a>
+            <a href="javascript:void(0)">Logout</a>
+        </nav>
+    </header>
+
+    <div class="hero">
+        <h1>Enterprise Cloud Collaboration Platform</h1>
+        <p>Streamline team communication, file distribution, and live API deployment.</p>
+        
+        <!-- TEST B: Bad Visual Hierarchy -->
+        <div id="mixed-visual-hierarchy" style="margin-top: 1.5rem;">
+            <button class="btn-cancel-giant">Delete Organization Workspace</button>
+            <a href="#" class="link-tiny-save">Save Workspace Settings</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- TEST E: Horizontal Overflow -->
+        <div id="mixed-overflow" class="card" style="overflow-x: visible;">
+            <h3>Workspace Integration Banner</h3>
+            <div class="overflow-strip">
+                Real-Time Active Node Sync Status: All 32 global clusters operational with 99.99% SLA guarantee.
+            </div>
+        </div>
+
+        <!-- TEST C: Confusing Form Usability -->
+        <div id="mixed-confusing-form" class="card">
+            <h3>API Token Management</h3>
+            <form>
+                <div style="margin-bottom: 1rem;">
+                    <input type="text" placeholder="Token Name / Value / Key" style="width: 80%; padding: 8px;">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <!-- Confusing form reset button styled as submit -->
+                    <input type="reset" value="Generate Token" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                    <input type="submit" value="Clear Fields" style="background: #7f8c8d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                </div>
+            </form>
+        </div>
+
+        <!-- TEST F: Unresponsive Button -->
+        <div class="card">
+            <h3>Automated Backup Execution</h3>
+            <button id="mixed-interaction-fail" style="background: #2980b9; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer;">
+                Trigger Immediate Full Backup
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // TEST F JS error
+        document.getElementById('mixed-interaction-fail').addEventListener('click', function() {
+            throw new Error("Uncaught Interaction Exception: Backup worker process died on element #mixed-interaction-fail");
+        });
+
+        // TEST G Runtime exception: uncaught exception thrown by initialization code on page load
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                throw new Error("Workspace initialization failed: background sync agent lost WebSocket heartbeat");
+            }, 200);
+        });
+    </script>
+</body>
+</html>
+

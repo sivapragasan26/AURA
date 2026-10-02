@@ -1,0 +1,99 @@
+{
+    "suite_id": "05_mixed_realistic_suite",
+    "name": "Consolidated Mixed Realistic Benchmark Suite",
+    "description": "Integrated realistic SaaS portal containing mixed accessibility, visual hierarchy, form UX, navigation, responsive overflow, interaction, and runtime defects",
+    "version": "0.4.4",
+    "expected_findings": [
+        {
+            "ground_truth_id": "GT-MIX-001",
+            "suite_id": "05_mixed_realistic_suite",
+            "category": "ACCESSIBILITY",
+            "normalized_rule": "image-alt",
+            "rule": "image-alt",
+            "severity": "MEDIUM",
+            "target": "#mixed-missing-alt",
+            "description": "Profile picture missing descriptive alt text attribute",
+            "verification_method": "axe_core_dom_attribute",
+            "expected_evidence": ["accessibility", "dom"],
+            "allowed_sources": ["AXE_CORE", "AI"]
+        },
+        {
+            "ground_truth_id": "GT-MIX-002",
+            "suite_id": "05_mixed_realistic_suite",
+            "category": "UI",
+            "normalized_rule": "bad_visual_hierarchy",
+            "rule": "bad_visual_hierarchy",
+            "severity": "HIGH",
+            "target": "#mixed-visual-hierarchy",
+            "description": "Primary action button visually hidden behind secondary links",
+            "verification_method": "screenshot_geometry_computed_style",
+            "expected_evidence": ["visual", "dom"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-MIX-003",
+            "suite_id": "05_mixed_realistic_suite",
+            "category": "UX",
+            "normalized_rule": "confusing_form",
+            "rule": "confusing_form",
+            "severity": "HIGH",
+            "target": "#mixed-confusing-form",
+            "description": "Form submit button type='reset' unexpectedly clears user inputs",
+            "verification_method": "dom_structure_and_form_labels",
+            "expected_evidence": ["dom", "visual"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-MIX-004",
+            "suite_id": "05_mixed_realistic_suite",
+            "category": "UX",
+            "normalized_rule": "bad_navigation",
+            "rule": "bad_navigation",
+            "severity": "HIGH",
+            "target": "#mixed-bad-nav",
+            "description": "Navigation bar items contain javascript:void(0) broken links",
+            "verification_method": "interaction_link_navigation",
+            "expected_evidence": ["dom", "interaction"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-MIX-005",
+            "suite_id": "05_mixed_realistic_suite",
+            "category": "RESPONSIVENESS",
+            "normalized_rule": "horizontal_overflow",
+            "rule": "horizontal_overflow",
+            "severity": "HIGH",
+            "target": "#mixed-overflow",
+            "description": "Wide dashboard table forces horizontal scrolling on desktop viewport",
+            "verification_method": "scroll_width_geometry",
+            "expected_evidence": ["dom", "visual"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-MIX-006",
+            "suite_id": "05_mixed_realistic_suite",
+            "category": "INTERACTION",
+            "normalized_rule": "interaction_failure",
+            "rule": "interaction_failure",
+            "severity": "CRITICAL",
+            "target": "#mixed-interaction-fail",
+            "description": "Checkout button throws Uncaught TypeError on click",
+            "verification_method": "before_after_interaction_state",
+            "expected_evidence": ["interaction", "runtime"],
+            "allowed_sources": ["AI", "RUNTIME"]
+        },
+        {
+            "ground_truth_id": "GT-MIX-007",
+            "suite_id": "05_mixed_realistic_suite",
+            "category": "RUNTIME",
+            "normalized_rule": "application_runtime_exception",
+            "rule": "application_runtime_exception",
+            "severity": "CRITICAL",
+            "target": "window",
+            "description": "Initialization script throws unhandled JS exception on page load",
+            "verification_method": "browser_exception_telemetry",
+            "expected_evidence": ["runtime"],
+            "allowed_sources": ["RUNTIME"]
+        }
+    ]
+}

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Site 09 - Runtime Errors</title>
+</head>
+<body>
+    <main>
+        <h1>AURA Test Site 09: Deliberate JavaScript Runtime Exception</h1>
+        <p>This page executes an unhandled JavaScript exception on page initialization.</p>
+    </main>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            console.error("Uncaught TypeError: Cannot read properties of undefined (reading 'map')");
+            throw new Error("Uncaught application error in main initialization loop");
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURA Benchmark - Accessibility Suite</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background: #f4f6f8; color: #333; }
+        header { background: #1a252f; color: #fff; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .hero { padding: 3rem 2rem; background: #ffffff; border-bottom: 1px solid #e0e0e0; }
+        .content { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+        .card { background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 1.5rem; }
+        .icon-btn { background: #007bff; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; }
+        .low-contrast-text { color: #888888; background-color: #999999; padding: 8px; border-radius: 4px; }
+        footer { text-align: center; padding: 2rem; color: #666; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <div style="font-size: 1.4rem; font-weight: bold;">TechPortal Solutions</div>
+        <div>
+            <!-- TEST D: Inaccessible void link -->
+            <a id="a11y-bad-link" href="javascript:void(0)" style="color: #4da6ff; text-decoration: none; margin-right: 15px;">Support Portal</a>
+            <!-- TEST B: Unlabelled Icon Button -->
+            <button id="a11y-button-name" class="icon-btn">🔍</button>
+        </div>
+    </header>
+
+    <div class="hero">
+        <h1>Welcome to TechPortal Enterprise Services</h1>
+        <p>Empowering digital transformation across global enterprise networks.</p>
+        <!-- TEST A: Missing Alt Image -->
+        <img id="a11y-missing-alt" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='80'><rect width='120' height='80' fill='%23007bff'/><text x='20' y='45' fill='white' font-family='sans-serif' font-size='14'>Logo</text></svg>">
+    </div>
+
+    <!-- Note: Intentionally missing <main> landmark for TEST E -->
+    <div class="content">
+        <div class="card">
+            <h2>Account Search</h2>
+            <form>
+                <!-- TEST F: Missing Form Label -->
+                <div style="margin-bottom: 1rem;">
+                    <input id="a11y-missing-label" type="text" placeholder="Enter Account ID or Email..." style="padding: 8px; width: 300px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Important Security Notice</h2>
+            <!-- TEST C: Low Contrast Text -->
+            <p id="a11y-contrast" class="low-contrast-text">
+                Please verify your security credentials before performing system operations.
+            </p>
+        </div>
+    </div>
+
+    <footer>
+        &copy; 2026 TechPortal Solutions Inc. All rights reserved.
+    </footer>
+</body>
+</html>
+

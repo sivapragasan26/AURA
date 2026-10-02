@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURA Benchmark - Responsive & Runtime Suite</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 0; background: #f0f2f5; }
+        header { background: #004085; color: white; padding: 1.5rem; }
+        main { padding: 2rem; }
+        /* TEST A: Wide fixed element forcing horizontal overflow */
+        .overflow-banner { width: 1800px; background: #007bff; color: white; padding: 15px; border-radius: 4px; margin-bottom: 2rem; }
+        /* TEST C: Fixed height clipped container */
+        .clipped-box { height: 35px; overflow: hidden; background: #fff; border: 1px solid #ccc; padding: 10px; margin-bottom: 2rem; }
+        /* TEST B: Mobile layout table break */
+        .wide-table { width: 1200px; border-collapse: collapse; background: white; }
+        .wide-table th, .wide-table td { border: 1px solid #ddd; padding: 12px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Global Analytics & Real-Time Telemetry</h1>
+    </header>
+
+    <main>
+        <!-- TEST A: Horizontal Overflow -->
+        <div id="responsive-overflow" class="overflow-banner">
+            Notice: Global Infrastructure Real-Time Telemetry Data Monitoring Banner Spanning Full Desktop Width
+        </div>
+
+        <!-- TEST C: Clipped Content -->
+        <div id="responsive-clipped-content" class="clipped-box">
+            <h3>System Status Details</h3>
+            <p>Line 1 of status description...</p>
+            <p>Line 2 clipped content text that is hidden due to overflow height limitations.</p>
+            <button style="margin-top: 20px;">Hidden Action Button</button>
+        </div>
+
+        <!-- TEST B: Mobile Layout Table Break -->
+        <div id="responsive-mobile-break" style="overflow-x: visible;">
+            <h3>Data Center Metric Distribution</h3>
+            <table class="wide-table">
+                <thead>
+                    <tr>
+                        <th>Region ID</th>
+                        <th>Node Cluster</th>
+                        <th>CPU Load</th>
+                        <th>Memory Load</th>
+                        <th>Network In</th>
+                        <th>Network Out</th>
+                        <th>Storage IOPS</th>
+                        <th>Active Threads</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>US-EAST-1</td>
+                        <td>CLUSTER-ALPHA-01</td>
+                        <td>88.4%</td>
+                        <td>64.2%</td>
+                        <td>1.2 GB/s</td>
+                        <td>4.8 GB/s</td>
+                        <td>45,000 IOPS</td>
+                        <td>1,240</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        // TEST D: Console Error
+        console.error("Application Initialization Error: Engine missing mandatory config key 'API_GATEWAY_URL'");
+
+        // TEST F: Network Fetch Failure to 500 endpoint
+        fetch('/api/v1/application-status-500').catch(function(err) {
+            console.error("Network Fetch Error:", err);
+        });
+
+        // TEST E: Runtime Exception
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                throw new Error("CRITICAL_APPLICATION_EXCEPTION: Component mounting failure in TelemetryEngine.render()");
+            }, 100);
+        });
+    </script>
+</body>
+</html>
+

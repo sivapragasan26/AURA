@@ -1,0 +1,13 @@
+{
+  "site_id": "07_bad_navigation",
+  "name": "Overlapping Navigation Links",
+  "description": "Navigation links overlap in absolute positioning causing layout obstruction.",
+  "expected_findings": [
+    {
+      "category": "UX",
+      "type": "navigation_layout",
+      "severity": "HIGH"
+    }
+  ]
+}
+

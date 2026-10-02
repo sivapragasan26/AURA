@@ -1,0 +1,86 @@
+{
+    "suite_id": "02_ui_ux_suite",
+    "name": "Consolidated UI/UX Benchmark Suite",
+    "description": "Realistic web application featuring intentional visual hierarchy, CTA, form usability, spacing, and error handling defects",
+    "version": "0.4.4",
+    "expected_findings": [
+        {
+            "ground_truth_id": "GT-UI-001",
+            "suite_id": "02_ui_ux_suite",
+            "category": "UI",
+            "normalized_rule": "bad_visual_hierarchy",
+            "rule": "bad_visual_hierarchy",
+            "severity": "HIGH",
+            "target": "#ui-visual-hierarchy",
+            "description": "Heading structure and visual emphasis violate clear visual hierarchy",
+            "verification_method": "screenshot_geometry_computed_style",
+            "expected_evidence": ["visual", "dom", "computed_style"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-UX-001",
+            "suite_id": "02_ui_ux_suite",
+            "category": "UX",
+            "normalized_rule": "confusing_form",
+            "rule": "confusing_form",
+            "severity": "HIGH",
+            "target": "#ux-confusing-form",
+            "description": "Form layout features confusing fields, unclear labels, and reset button traps",
+            "verification_method": "dom_structure_and_form_labels",
+            "expected_evidence": ["dom", "visual"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-UI-002",
+            "suite_id": "02_ui_ux_suite",
+            "category": "UI",
+            "normalized_rule": "excessive_information_density",
+            "rule": "poor_information_density",
+            "severity": "MEDIUM",
+            "target": "#ui-poor-density",
+            "description": "Excessive content clutter and overcrowding without logical visual grouping",
+            "verification_method": "geometry_spacing_density",
+            "expected_evidence": ["visual", "dom"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-UI-003",
+            "suite_id": "02_ui_ux_suite",
+            "category": "UI",
+            "normalized_rule": "weak_primary_cta",
+            "rule": "weak_cta",
+            "severity": "HIGH",
+            "target": "#ui-weak-cta",
+            "description": "Primary action button lacks visual hierarchy prominence relative to secondary actions",
+            "verification_method": "computed_style_and_contrast",
+            "expected_evidence": ["visual", "dom"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-UI-004",
+            "suite_id": "02_ui_ux_suite",
+            "category": "UI",
+            "normalized_rule": "inconsistent_component_styling",
+            "rule": "inconsistent_components",
+            "severity": "MEDIUM",
+            "target": "#ui-inconsistent-components",
+            "description": "Buttons and controls exhibit conflicting, inconsistent styling and font families",
+            "verification_method": "computed_style_comparison",
+            "expected_evidence": ["visual", "dom"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-UX-002",
+            "suite_id": "02_ui_ux_suite",
+            "category": "UX",
+            "normalized_rule": "poor_error_recovery",
+            "rule": "unclear_error_message",
+            "severity": "HIGH",
+            "target": "#ux-unclear-error",
+            "description": "Error banner provides ambiguous, non-actionable error recovery instructions",
+            "verification_method": "dom_text_analysis",
+            "expected_evidence": ["dom", "visual"],
+            "allowed_sources": ["AI"]
+        }
+    ]
+}

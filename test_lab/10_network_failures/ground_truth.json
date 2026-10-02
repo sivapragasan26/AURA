@@ -1,0 +1,13 @@
+{
+  "site_id": "10_network_failures",
+  "name": "Network Request Failure",
+  "description": "Page triggers failing 4xx/5xx network request.",
+  "expected_findings": [
+    {
+      "category": "RUNTIME",
+      "rule": "API_ERROR",
+      "severity": "MEDIUM"
+    }
+  ]
+}
+

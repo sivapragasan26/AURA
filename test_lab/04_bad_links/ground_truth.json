@@ -1,0 +1,13 @@
+{
+  "site_id": "04_bad_links",
+  "name": "Inaccessible Empty Link",
+  "description": "Anchor link element contains no text or accessible name (axe-core link-name violation).",
+  "expected_findings": [
+    {
+      "category": "ACCESSIBILITY",
+      "rule": "link-name",
+      "severity": "SERIOUS"
+    }
+  ]
+}
+

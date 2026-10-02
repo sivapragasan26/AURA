@@ -1,0 +1,13 @@
+{
+  "site_id": "11_mobile_layout",
+  "name": "Mobile Layout Overflow",
+  "description": "Fixed 900px wide container causes horizontal scroll and mobile layout clipping.",
+  "expected_findings": [
+    {
+      "category": "RESPONSIVENESS",
+      "type": "horizontal_overflow",
+      "severity": "HIGH"
+    }
+  ]
+}
+

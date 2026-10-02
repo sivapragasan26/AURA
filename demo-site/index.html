@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURA Demo Store & Portal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="logo">
+            <h1>AURA Demo Portal</h1>
+        </div>
+        <nav class="main-nav" aria-label="Main Navigation">
+            <ul>
+                <li><a href="#hero">Home</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#form-section">Contact Us</a></li>
+                <li><a href="#footer">About</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section id="hero" class="hero-section">
+            <div class="hero-content">
+                <h2>Autonomous UI/UX Runtime Assurance Platform</h2>
+                <p>Ensuring seamless digital experiences through real-time observation, AI analysis, and deterministic verification.</p>
+                <button id="main-cta-btn" class="btn btn-primary" type="button">Explore Products</button>
+            </div>
+        </section>
+
+        <section id="features" class="cards-section">
+            <h2>Core Assurance Features</h2>
+            <div class="card-grid">
+                <article class="card">
+                    <img src="https://via.placeholder.com/300x180" alt="Runtime telemetry monitoring chart">
+                    <h3>Runtime Telemetry</h3>
+                    <p>Captures live console exceptions, network response failures, and page load timing.</p>
+                </article>
+                <article class="card">
+                    <img src="https://via.placeholder.com/300x180" alt="Multimodal AI vision inspection icon">
+                    <h3>Multimodal AI Inspection</h3>
+                    <p>Analyzes full-page screenshots and structured DOM layouts using vision models.</p>
+                </article>
+                <article class="card">
+                    <img src="https://via.placeholder.com/300x180" alt="Accessibility compliance check mark icon">
+                    <h3>axe-core Accessibility</h3>
+                    <p>Performs automated W3C WCAG compliance auditing on every rendered element.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="form-section" class="form-section">
+            <h2>Contact Our Team</h2>
+            <form id="contact-form">
+                <div class="form-group">
+                    <label for="fullname">Full Name</label>
+                    <input type="text" id="fullname" name="fullname" placeholder="Enter your full name" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" placeholder="user@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="message">Message</label>
+                    <textarea id="message" name="message" rows="4" placeholder="How can we assist you?"></textarea>
+                </div>
+                <button id="submit-form-btn" type="submit" class="btn btn-secondary">Submit Inquiry</button>
+            </form>
+        </section>
+    </main>
+
+    <footer id="footer" class="site-footer">
+        <p>&copy; 2026 AURA Assurance Platform. All rights reserved.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
+

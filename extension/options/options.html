@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AURA settings</title>
+  <link rel="stylesheet" href="../sidepanel/panel.css">
+  <style>
+    body { max-width: 560px; margin: 32px auto; padding: 0 16px; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    label { display: block; font-weight: 600; margin: 16px 0 4px; }
+    input[type=text], input[type=password] { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
+    .row { display: flex; gap: 8px; margin-top: 18px; align-items: center; }
+    #status { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>AURA settings</h1>
+  <p class="fine">The extension talks only to your local AURA server. AI provider API keys are configured on the server (<code>.env</code>) and are never stored in the extension.</p>
+
+  <label for="backend">AURA server URL</label>
+  <input id="backend" type="text" spellcheck="false" placeholder="http://127.0.0.1:8765">
+
+  <label for="token">Pairing token</label>
+  <input id="token" type="password" spellcheck="false" autocomplete="off" placeholder="Printed by: python -m aura.api">
+  <p class="fine">Start the server with <code>python -m aura.api</code>; it prints this token. It only authorises this extension to use your local server.</p>
+
+  <div class="row">
+    <button id="save" class="btn">Save &amp; test connection</button>
+    <label class="toggle" style="margin:0;font-weight:500"><input type="checkbox" id="reveal"><span></span>Show token</label>
+  </div>
+  <div id="status" class="fine" aria-live="polite"></div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Site 08 - Bad Visual Hierarchy</title>
+    <style>
+        .cta-container { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-primary { background: #f0f0f0; color: #666; border: 1px solid #ccc; padding: 10px 20px; font-size: 12px; }
+        .btn-secondary { background: #ff0000; color: #fff; border: none; padding: 16px 32px; font-size: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>AURA Test Site 08: Weak Primary Action Hierarchy</h1>
+        <p>The primary CTA "Complete Order" is styled small and pale, while secondary "Cancel" button is huge and bright red.</p>
+        <div class="cta-container">
+            <button class="btn-primary" id="primary-cta">Complete Order (Primary)</button>
+            <button class="btn-secondary" id="cancel-cta">CANCEL EVERYTHING (Secondary)</button>
+        </div>
+    </main>
+</body>
+</html>
+

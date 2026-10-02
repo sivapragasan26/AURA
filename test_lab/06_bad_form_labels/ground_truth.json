@@ -1,0 +1,13 @@
+{
+  "site_id": "06_bad_form_labels",
+  "name": "Missing Form Label",
+  "description": "Form input lacks explicit or implicit associated label tag (axe-core label violation).",
+  "expected_findings": [
+    {
+      "category": "ACCESSIBILITY",
+      "rule": "label",
+      "severity": "CRITICAL"
+    }
+  ]
+}
+

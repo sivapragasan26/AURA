@@ -1,0 +1,13 @@
+{
+  "site_id": "05_bad_landmarks",
+  "name": "Missing Landmark",
+  "description": "Document does not contain a main landmark element (axe-core landmark-one-main violation).",
+  "expected_findings": [
+    {
+      "category": "ACCESSIBILITY",
+      "rule": "landmark-one-main",
+      "severity": "MODERATE"
+    }
+  ]
+}
+

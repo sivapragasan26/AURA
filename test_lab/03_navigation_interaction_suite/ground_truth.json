@@ -1,0 +1,86 @@
+{
+    "suite_id": "03_navigation_interaction_suite",
+    "name": "Consolidated Navigation & Interaction Benchmark Suite",
+    "description": "Interactive web application featuring broken navigation controls, unresponsive buttons, and failed interactions",
+    "version": "0.4.4",
+    "expected_findings": [
+        {
+            "ground_truth_id": "GT-NAV-001",
+            "suite_id": "03_navigation_interaction_suite",
+            "category": "UX",
+            "normalized_rule": "bad_navigation",
+            "rule": "bad_navigation",
+            "severity": "HIGH",
+            "target": "#nav-bad-links",
+            "description": "Navigation links contain broken or placeholder href attributes",
+            "verification_method": "interaction_link_navigation",
+            "expected_evidence": ["dom", "interaction"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-INT-001",
+            "suite_id": "03_navigation_interaction_suite",
+            "category": "INTERACTION",
+            "normalized_rule": "interaction_failure",
+            "rule": "interaction_failure",
+            "severity": "CRITICAL",
+            "target": "#interaction-broken-btn",
+            "description": "Clicking action button triggers an unhandled script exception",
+            "verification_method": "before_after_interaction_state",
+            "expected_evidence": ["interaction", "runtime"],
+            "allowed_sources": ["AI", "RUNTIME"]
+        },
+        {
+            "ground_truth_id": "GT-NAV-002",
+            "suite_id": "03_navigation_interaction_suite",
+            "category": "UX",
+            "normalized_rule": "broken_menu",
+            "rule": "broken_menu",
+            "severity": "HIGH",
+            "target": "#nav-broken-menu",
+            "description": "Dropdown menu fails to display submenu options on click or hover",
+            "verification_method": "interaction_state_comparison",
+            "expected_evidence": ["interaction", "dom"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-INT-002",
+            "suite_id": "03_navigation_interaction_suite",
+            "category": "INTERACTION",
+            "normalized_rule": "non_responsive_control",
+            "rule": "dead_button",
+            "severity": "MEDIUM",
+            "target": "#interaction-dead-btn",
+            "description": "Button control produces no visible feedback or DOM change on click",
+            "verification_method": "before_after_dom_comparison",
+            "expected_evidence": ["interaction", "dom"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-NAV-003",
+            "suite_id": "03_navigation_interaction_suite",
+            "category": "UX",
+            "normalized_rule": "misleading_cta",
+            "rule": "misleading_cta",
+            "severity": "HIGH",
+            "target": "#nav-misleading-cta",
+            "description": "Button label promises one action but navigates to an unrelated destination",
+            "verification_method": "semantic_destination_check",
+            "expected_evidence": ["dom", "visual"],
+            "allowed_sources": ["AI"]
+        },
+        {
+            "ground_truth_id": "GT-INT-003",
+            "suite_id": "03_navigation_interaction_suite",
+            "category": "INTERACTION",
+            "normalized_rule": "broken_form_submission",
+            "rule": "failed_form_interaction",
+            "severity": "HIGH",
+            "target": "#interaction-form-failed",
+            "description": "Submitting form produces no validation feedback or confirmation message",
+            "verification_method": "form_submission_inspection",
+            "expected_evidence": ["interaction", "dom"],
+            "allowed_sources": ["AI"]
+        }
+    ]
+}

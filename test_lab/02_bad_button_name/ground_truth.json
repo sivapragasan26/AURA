@@ -1,0 +1,13 @@
+{
+  "site_id": "02_bad_button_name",
+  "name": "Unlabelled Button",
+  "description": "Button element lacks accessible name text or aria-label (axe-core button-name violation).",
+  "expected_findings": [
+    {
+      "category": "ACCESSIBILITY",
+      "rule": "button-name",
+      "severity": "CRITICAL"
+    }
+  ]
+}
+
