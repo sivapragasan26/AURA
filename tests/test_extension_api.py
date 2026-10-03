@@ -437,6 +437,57 @@ def test_the_extension_sends_exactly_the_fields_the_server_declares():
         f"the panel's privacy notice says so, and the service holds nothing on disk.")
 
 
+def test_the_body_limit_admits_the_largest_bundle_the_schema_allows_and_little_more():
+    """
+    The body gate and the schema's own caps must agree.
+
+    Too low and a legitimately large page is refused with no finding at all; too high and the gate is not
+    really a gate. This builds the largest bundle every cap permits and checks the limit sits above it
+    with headroom, but within reach of it.
+    """
+    import json as _json
+
+    from aura.api import security
+    from aura.evidence import bundle as B
+
+    def element(i):
+        return {"tag": "button", "id": f"id-{i}" * 3, "class": "c1 c2 c3 some-long-utility-class-name " * 3,
+                "selector": f"body > div:nth-child({i}) > section > button.primary", "text": "X" * B.MAX_TEXT,
+                "role": "button", "visible": True, "href": "https://example.test/" + "p" * 60,
+                "bounding_box": {"x": 1.5, "y": 2.5, "width": 100.25, "height": 44.75},
+                "computed_style": {k: "rgb(123, 45, 6)" for k in
+                                   ("color", "background-color", "font-size", "font-weight", "display",
+                                    "position", "margin", "padding", "border", "z-index", "overflow")},
+                "aria": {"label": "L" * 80}}
+
+    biggest = {
+        "source": "extension", "collector_version": "aura-extension/0.5.0",
+        "url": "https://example.test/" + "x" * 200, "title": "T" * 200,
+        "viewport": {"width": 1920, "height": 1080},
+        "dom": {"elements": [element(i) for i in range(B.MAX_ELEMENTS)]},
+        "axe": {"available": True, "version": "4.8.2", "violations": [
+            {"id": f"rule-{v}", "impact": "serious", "description": "D" * 300,
+             "helpUrl": "https://dequeuniversity.com/" + "h" * 80,
+             "nodes": [{"target": [f"body > div:nth-child({n}) > a.link-class"]} for n in range(B.MAX_AXE_NODES)]}
+            for v in range(B.MAX_AXE_VIOLATIONS)]},
+        "telemetry": {"console": [{"type": "error", "text": "E" * 300, "location": "https://example.test/app.js:120"}
+                                  for _ in range(B.MAX_CONSOLE)],
+                      "network": [{"url": "https://example.test/" + "q" * 150, "status": 404, "method": "GET"}
+                                  for _ in range(B.MAX_NETWORK)]},
+        "capture_size": {"width": 1920, "height": 9000},
+        "target_boxes": {f"sel-{i}": {"x": 1, "y": 2, "width": 3, "height": 4} for i in range(600)},
+        "captured_at": "2026-10-03T00:00:00.000Z",
+    }
+    size = len(_json.dumps({"bundle": biggest, "screenshot_attached": True}))
+    assert B.EvidenceBundle(**biggest)                      # it really is a bundle the server would accept
+    assert size < security.MAX_BODY_BYTES, (
+        f"the largest bundle the schema allows is {size:,} bytes, which the {security.MAX_BODY_BYTES:,}-byte "
+        f"body limit would refuse: a big page would be rejected rather than scanned")
+    assert security.MAX_BODY_BYTES < size * 3, (
+        f"the body limit ({security.MAX_BODY_BYTES:,}) is more than three times the largest bundle the "
+        f"schema allows ({size:,}): the caps, not the gate, are doing all the work")
+
+
 def test_an_unknown_field_costs_the_evidence_not_the_scan():
     """A newer extension against an older server must still get a scan, minus the field it could not use."""
     from aura.evidence.bundle import EvidenceBundle

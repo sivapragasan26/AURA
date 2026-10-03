@@ -150,6 +150,9 @@ class PendingScan:
     # pipeline is told later: the recorded prompt then matches the one the model actually received.
     screenshot_attached: bool
     screenshot_captured: bool
+    # The install that prepared this scan. Only it can complete it: an audit id is a running number, and
+    # finishing someone else's scan would hand over their page's evidence.
+    owner: str = ""
     created_at: float = field(default_factory=time.time)
 
 
@@ -174,11 +177,19 @@ class PendingScans:
             self._items.move_to_end(audit_id)
             self._evict(time.time())
 
-    def take(self, audit_id: str) -> Optional[PendingScan]:
-        """Removes and returns the scan: a prepared scan can be completed once."""
+    def take(self, audit_id: str, owner: str = "") -> Optional[PendingScan]:
+        """
+        Removes and returns the scan, for the install that prepared it.
+
+        A prepared scan can be completed once, and only by its owner; anyone else is told there is no
+        such scan waiting, which is what they would see for an id that never existed.
+        """
         with self._lock:
             self._evict(time.time())
-            return self._items.pop(audit_id, None)
+            held = self._items.get(audit_id)
+            if held is None or held.owner != owner:
+                return None
+            return self._items.pop(audit_id)
 
     def __len__(self) -> int:
         with self._lock:

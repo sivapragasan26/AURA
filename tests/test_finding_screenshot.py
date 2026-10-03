@@ -62,6 +62,12 @@ def auth():
     return {security.TOKEN_HEADER: TOKEN, "Origin": EXT_ORIGIN}
 
 
+# An audit belongs to the install that made it (see tests/test_audit_isolation.py). These tests put views
+# into the store directly, so they put them there as the caller that will then ask for them.
+def owner():
+    return security.install_id(TOKEN, TOKEN)
+
+
 def _write_capture(tmp_path, img=None):
     run = tmp_path / AUDIT
     run.mkdir(parents=True, exist_ok=True)
@@ -71,7 +77,7 @@ def _write_capture(tmp_path, img=None):
 def test_crop_is_returned_for_a_finding_with_geometry(client, tmp_path):
     api, store = client
     _write_capture(tmp_path)
-    store.put(_view([{"x": 100, "y": 200, "width": 120, "height": 30}]))
+    store.put(_view([{"x": 100, "y": 200, "width": 120, "height": 30}]), owner())
 
     r = api.get(f"/api/audits/{AUDIT}/findings/F-001/screenshot", headers=auth())
     assert r.status_code == 200
@@ -87,7 +93,7 @@ def test_crop_is_returned_for_a_finding_with_geometry(client, tmp_path):
 def test_the_element_is_outlined_in_the_crop(client, tmp_path):
     api, store = client
     _write_capture(tmp_path)
-    store.put(_view([{"x": 100, "y": 200, "width": 120, "height": 60}]))
+    store.put(_view([{"x": 100, "y": 200, "width": 120, "height": 60}]), owner())
 
     r = api.get(f"/api/audits/{AUDIT}/findings/F-001/screenshot", headers=auth())
     from PIL import Image
@@ -102,7 +108,7 @@ def test_a_grouped_finding_covers_every_recorded_box(client, tmp_path):
     _write_capture(tmp_path)
     far_apart = [{"x": 20, "y": 20, "width": 40, "height": 20},
                  {"x": 700, "y": 600, "width": 40, "height": 20}]
-    store.put(_view(far_apart))
+    store.put(_view(far_apart), owner())
 
     r = api.get(f"/api/audits/{AUDIT}/findings/F-001/screenshot", headers=auth())
     from PIL import Image
@@ -113,7 +119,7 @@ def test_a_grouped_finding_covers_every_recorded_box(client, tmp_path):
 
 def test_no_capture_is_reported_honestly(client, tmp_path):
     api, store = client
-    store.put(_view([{"x": 10, "y": 10, "width": 50, "height": 20}]))  # no screenshot.png written
+    store.put(_view([{"x": 10, "y": 10, "width": 50, "height": 20}]), owner())  # no screenshot.png written
 
     r = api.get(f"/api/audits/{AUDIT}/findings/F-001/screenshot", headers=auth())
     assert r.status_code == 404
@@ -125,7 +131,7 @@ def test_a_finding_without_geometry_is_not_given_the_whole_page(client, tmp_path
     """A page-level finding has no region. Showing the full page would imply a location AURA never had."""
     api, store = client
     _write_capture(tmp_path)
-    store.put(_view([]))
+    store.put(_view([]), owner())
 
     r = api.get(f"/api/audits/{AUDIT}/findings/F-001/screenshot", headers=auth())
     assert r.status_code == 404
@@ -135,7 +141,7 @@ def test_a_finding_without_geometry_is_not_given_the_whole_page(client, tmp_path
 def test_unknown_audit_and_finding_are_404(client, tmp_path):
     api, store = client
     _write_capture(tmp_path)
-    store.put(_view([{"x": 10, "y": 10, "width": 50, "height": 20}]))
+    store.put(_view([{"x": 10, "y": 10, "width": 50, "height": 20}]), owner())
     assert api.get(f"/api/audits/{AUDIT}/findings/F-404/screenshot", headers=auth()).status_code == 404
     assert api.get("/api/audits/AURA-2026-000999/findings/F-001/screenshot", headers=auth()).status_code == 404
 
@@ -143,7 +149,7 @@ def test_unknown_audit_and_finding_are_404(client, tmp_path):
 def test_the_screenshot_needs_the_pairing_token(client, tmp_path):
     api, store = client
     _write_capture(tmp_path)
-    store.put(_view([{"x": 10, "y": 10, "width": 50, "height": 20}]))
+    store.put(_view([{"x": 10, "y": 10, "width": 50, "height": 20}]), owner())
     r = api.get(f"/api/audits/{AUDIT}/findings/F-001/screenshot", headers={"Origin": EXT_ORIGIN})
     assert r.status_code == 401
 
@@ -152,7 +158,7 @@ def test_the_audit_view_never_embeds_image_data(client, tmp_path):
     """Geometry travels in the view; pixels do not. The image is fetched on demand instead."""
     api, store = client
     _write_capture(tmp_path)
-    store.put(_view([{"x": 10, "y": 10, "width": 50, "height": 20}]))
+    store.put(_view([{"x": 10, "y": 10, "width": 50, "height": 20}]), owner())
     body = json.dumps(store.get(AUDIT))
     assert "base64" not in body and "data:image" not in body
     assert "iVBOR" not in body  # the PNG base64 prefix
@@ -165,7 +171,7 @@ def test_capture_scale_is_derived_from_the_viewport(client, tmp_path):
     """
     api, store = client
     _write_capture(tmp_path)
-    store.put(_view([{"x": 400, "y": 300, "width": 60, "height": 40}]))  # CSS px, i.e. 800,600 in capture px
+    store.put(_view([{"x": 400, "y": 300, "width": 60, "height": 40}]), owner())  # CSS px, i.e. 800,600 in capture px
     r = api.get(f"/api/audits/{AUDIT}/findings/F-001/screenshot", headers=auth())
     assert r.status_code == 200
     from PIL import Image

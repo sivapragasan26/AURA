@@ -111,6 +111,10 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
     pending = PendingScans()
     allow_list = security.allowed_origins()
 
+    def caller(request: Request) -> str:
+        """The install that is asking, so an audit is only ever handed back to the install that made it."""
+        return security.install_id(api_token, request.headers.get(security.TOKEN_HEADER))
+
     def guard(request: Request, require_token: bool = True) -> Optional[JSONResponse]:
         if not security.host_allowed(request.headers.get("host")):
             return _error(403, "HOST_NOT_ALLOWED", "The AURA API only answers on the loopback interface.")
@@ -247,12 +251,13 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         return JSONResponse({"plan": plan, "blocked": blocked[:50], "budget": budget,
                              "policy": "AURA live-session policy: clicks only; no typing, form submission or navigation."})
 
-    def _prepare(bundle: EvidenceBundle, screenshot_attached: bool) -> Dict[str, Any]:
+    def _prepare(bundle: EvidenceBundle, screenshot_attached: bool, owner: str) -> Dict[str, Any]:
         audit_id = AURAOrchestrator.generate_audit_id()
         packet = build_ai_prompt(bundle, screenshot_attached=screenshot_attached)
         pending.put(audit_id, PendingScan(
             bundle=bundle, prompt=packet.to_prompt(), max_findings=packet.max_findings,
             screenshot_attached=screenshot_attached, screenshot_captured=bool(bundle.capture_size),
+            owner=owner,
         ))
         return {"audit_id": audit_id, "prompt": packet.to_prompt(), "max_findings": packet.max_findings,
                 "expires_in": PENDING_TTL_SECONDS, "api_version": API_VERSION}
@@ -277,7 +282,8 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
             problems = [{"field": ".".join(str(p) for p in d.get("loc", [])), "problem": d.get("msg")} for d in e.errors()[:10]]
             return _error(422, "INVALID_EVIDENCE", "Evidence bundle failed validation.", problems=problems)
         try:
-            prepared = await run_in_threadpool(_prepare, bundle, bool((data or {}).get("screenshot_attached")))
+            prepared = await run_in_threadpool(_prepare, bundle,
+                                               bool((data or {}).get("screenshot_attached")), caller(request))
         except ValueError as e:
             return _error(400, "INVALID_EVIDENCE", sanitize_provider_error(e)[:300])
         except Exception as e:
@@ -312,7 +318,7 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
             return err
         data = data or {}
         audit_id = request.path_params["audit_id"]
-        scan = pending.take(audit_id)
+        scan = pending.take(audit_id, caller(request))
         if scan is None:
             return _error(404, "SCAN_NOT_PENDING",
                           "This scan is no longer waiting for a result. Scan the page again.")
@@ -336,7 +342,7 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
             logger.error(f"Completing a scan failed: {sanitize_provider_error(e)}")
             return _error(500, "SCAN_FAILED", "The AURA engine failed to analyse this page.",
                           detail=sanitize_provider_error(e)[:300])
-        audit_store.put(view)
+        audit_store.put(view, caller(request))
         return JSONResponse(view)
 
     def _run_audit(bundle: EvidenceBundle, use_ai: bool) -> Dict[str, Any]:
@@ -367,14 +373,14 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
             logger.error(f"Extension audit failed: {sanitize_provider_error(e)}")
             return _error(500, "SCAN_FAILED", "The AURA engine failed to analyse this page.",
                           detail=sanitize_provider_error(e)[:300])
-        audit_store.put(view)
+        audit_store.put(view, caller(request))
         return JSONResponse(view)
 
     async def get_audit(request: Request) -> JSONResponse:
         denied = guard(request)
         if denied:
             return denied
-        view = audit_store.get(request.path_params["audit_id"])
+        view = audit_store.get(request.path_params["audit_id"], caller(request))
         if view is None:
             return _error(404, "NOT_FOUND", "Audit not found.")
         return JSONResponse(view)
@@ -385,7 +391,7 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         if denied:
             return denied
         audit_id = request.path_params["audit_id"]
-        view = audit_store.get(audit_id)
+        view = audit_store.get(audit_id, caller(request))
         if view is None:
             return _error(404, "NOT_FOUND", "Audit not found.")
         fid = request.path_params["finding_id"]
@@ -407,7 +413,7 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         denied = guard(request)
         if denied:
             return denied
-        view = audit_store.get(request.path_params["audit_id"])
+        view = audit_store.get(request.path_params["audit_id"], caller(request))
         if view is None:
             return _error(404, "NOT_FOUND", "Audit not found.")
         fid = request.path_params["finding_id"]
@@ -424,7 +430,7 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         denied = guard(request)
         if denied:
             return denied
-        view = audit_store.get(request.path_params["audit_id"])
+        view = audit_store.get(request.path_params["audit_id"], caller(request))
         if view is None:
             return _error(404, "NOT_FOUND", "Audit not found.")
         data, err = await read_json(request)

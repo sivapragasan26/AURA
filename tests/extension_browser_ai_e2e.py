@@ -274,6 +274,10 @@ def main():
         check("AURA never receives that key" in privacy, "the panel says AURA never receives the key")
 
         # ---- the scan ------------------------------------------------------------------------------
+        # The scanned tab must be the front one, as it is when a person presses Scan: a capture of a
+        # window that is not in front never settles in a headless browser, and the panel of a window that
+        # is not in front renders nothing to read back.
+        h.activate(tab)
         panel.scan(timeout=300)
         sent = h.evaluate(panel.session, "window.__sent")
         steps = panel.js("document.getElementById('steps').textContent")
@@ -293,6 +297,11 @@ def main():
               f"no screenshot was uploaded to AURA (bundle keys: {sorted(bundle)})")
         check(isinstance(bundle.get("capture_size"), dict) and bundle["capture_size"].get("height", 0) > 0,
               f"the capture size was declared instead ({bundle.get('capture_size')})")
+        print(f"   prepare body: {len(prepare['body']):,} bytes of evidence "
+              f"({bundle['dom'].get('elements') and len(bundle['dom']['elements'])} DOM elements, "
+              f"{len(bundle.get('target_boxes') or {})} boxes)")
+        check(len(prepare["body"]) < 3 * 1024 * 1024,
+              f"the evidence a scan uploads is small now that no image goes with it ({len(prepare['body']):,} bytes)")
         check(TEST_KEY not in prepare["body"], "the API key is not in what AURA receives")
         check(TEST_KEY not in json.dumps(prepare["headers"]), "the API key is not in the headers AURA receives")
         complete = next(s for s in sent if "/complete" in s["url"])
@@ -338,6 +347,7 @@ def main():
         # ---- a provider that refuses ----------------------------------------------------------------
         STUB_STATE["mode"] = "rate_limited"
         h.evaluate(panel.session, "window.__sent = []")
+        h.activate(tab)
         panel.scan(timeout=300)
         steps2 = panel.js("document.getElementById('steps').textContent")
         summary = panel.js("document.getElementById('results').textContent")

@@ -33,7 +33,11 @@ def allowed_hosts() -> set:
     """
     extra = {h.strip().lower() for h in os.getenv("AURA_ALLOWED_HOSTS", "").split(",") if h.strip()}
     return LOOPBACK_HOSTS | extra
-MAX_BODY_BYTES = 20 * 1024 * 1024  # evidence bundle incl. the viewport and full-page base64 PNGs
+# The largest request body accepted. The screenshots stay in the browser now, so the biggest bundle the
+# schema can possibly admit - 3000 elements with styles, 200 axe violations of 50 nodes each, the console
+# and network caps, 600 boxes - measures 4.43 MB, and this leaves headroom over that without leaving the
+# gate wide open. A bundle posted over HTTP therefore cannot carry a capture, which is the intent.
+MAX_BODY_BYTES = 6 * 1024 * 1024
 
 
 def load_or_create_token(path: Optional[Path] = None) -> str:
@@ -103,6 +107,23 @@ def install_token_valid(api_token: str, supplied: Optional[str]) -> bool:
 def accepted(api_token: str, supplied: Optional[str]) -> bool:
     """The server's own token (local install, self-hosters) or a validly signed per-install token."""
     return token_matches(api_token, supplied) or install_token_valid(api_token, supplied)
+
+
+def install_id(api_token: str, supplied: Optional[str]) -> str:
+    """
+    Who presented this token, as a short non-reversible id.
+
+    A valid token says a request came from an AURA install; it does not say WHICH one, and audit ids are a
+    running number anyone could guess. Each stored audit is kept against the id of the install that made
+    it, so one person's scan of one of their pages cannot be read back by another. Derived with the same
+    secret the tokens are signed with, so the id cannot be turned back into a token, and the token itself
+    is never stored.
+    """
+    presented = (supplied or "").strip()
+    if not presented:
+        return ""
+    return hmac.new(_signing_secret(api_token), ("install:" + presented).encode("utf-8"),
+                    hashlib.sha256).hexdigest()[:24]
 
 
 def allowed_origins() -> list:
