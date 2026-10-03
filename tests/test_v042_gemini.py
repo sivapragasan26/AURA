@@ -7,10 +7,13 @@ from aura.config import settings
 def test_gemini_model_registry_defaults():
     assert DEFAULT_MODELS["gemini"] == "gemini-3.6-flash"
     assert "gemini-3.6-flash" in PROVIDER_MODELS["gemini"]
-    assert "gemini-2.5-flash" in PROVIDER_MODELS["gemini"]
-    assert "gemini-2.5-pro" in PROVIDER_MODELS["gemini"]
-    assert "gemini-1.5-flash" in PROVIDER_MODELS["gemini"]
-    assert "gemini-1.5-pro" in PROVIDER_MODELS["gemini"]
+    assert "gemini-3.8-flash" in PROVIDER_MODELS["gemini"]
+    # The 2.5 generation is closed to accounts that never used it, so AURA no longer offers it.
+    assert "gemini-2.5-flash" not in PROVIDER_MODELS["gemini"]
+    assert "gemini-3.5-flash-lite" in PROVIDER_MODELS["gemini"]
+    assert "gemini-3.1-flash-lite" in PROVIDER_MODELS["gemini"]
+    # The 1.5 and 2.5 generations are gone from what AURA offers; a new key cannot use them.
+    assert not [m for m in PROVIDER_MODELS["gemini"] if m.startswith(("gemini-1.5", "gemini-2.5"))]
 
 
 def test_gemini_provider_init():

@@ -202,7 +202,7 @@ def build() -> Path:
     size_kb = out.stat().st_size / 1024
     print(f"\n{out.relative_to(ROOT)} : {len(files)} files, {size_kb:.0f} KB, version {version}")
     print("Load it with chrome://extensions > Load unpacked (the extension/ folder), or submit the zip.")
-    print("Still to produce by hand: listing artwork (see docs/STORE-LISTING.md).")
+    print("Listing artwork: python -m aura.tools.listing_art --provider groq")
     return out
 
 

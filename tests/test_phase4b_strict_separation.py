@@ -222,8 +222,8 @@ def test_model_capabilities_and_system_prompt_grounding():
     # Groq vision models
     assert supports_vision("groq", "qwen/qwen3.8-27b") is True
     assert supports_vision("groq", "llama-3.3-70b-versatile") is False
-    assert supports_vision("gemini", "gemini-2.5-flash") is True
-    assert supports_vision("openai", "gpt-4o") is True
+    assert supports_vision("gemini", "gemini-3.6-flash") is True
+    assert supports_vision("openai", "gpt-6-luna") is True
 
     # System prompt visual grounding
     assert "CRITICAL VISUAL GROUNDING RULES" in AURA_SYSTEM_PROMPT

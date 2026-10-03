@@ -33,13 +33,13 @@ ensure_dir(TEMP_DIR)
 AI_PROVIDER = os.getenv("AI_PROVIDER", "mock").lower()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", os.getenv("AI_API_KEY", ""))
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", os.getenv("AI_MODEL", "gpt-4o"))
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", os.getenv("AI_MODEL", "gpt-6-luna"))
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", os.getenv("AI_API_KEY", ""))
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", os.getenv("AI_MODEL", "gemini-3.6-flash"))
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", os.getenv("AI_API_KEY", ""))
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", os.getenv("AI_MODEL", "claude-3-5-sonnet-20241022"))
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", os.getenv("AI_MODEL", "claude-haiku-4-5"))
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", os.getenv("groq_api", os.getenv("GROQ_API", "")))
 GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")

@@ -14,9 +14,11 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from aura.config import settings
-from aura.config.models import DEFAULT_MODELS, MODEL_CAPABILITIES, PROVIDER_MODELS
+from aura.config.models import DEFAULT_MODELS, MODEL_CAPABILITIES, PROVIDER_MODELS, PROVIDER_PRICING
 from aura.security.credentials import SessionCredentialsManager
 
+# Free-tier providers first: Groq and Gemini cost nothing to try, which is what nearly everyone will
+# use, and the picker shows them in this order. Mock stays first of all as the no-key demo.
 PROVIDER_LABELS = {
     "mock": "Mock AI · Demo",
     "groq": "Groq",
@@ -86,6 +88,9 @@ class ProviderConfig:
                 "is_mock": key == "mock",
                 "requires_key": key != "mock",
                 "models": list(PROVIDER_MODELS.get(key, [])),
+                # "free tier" / "paid account": shown in the picker so the two that cost nothing to try
+                # are obvious before anyone goes looking for a key.
+                "pricing": PROVIDER_PRICING.get(key, ""),
                 # What each model can do, so the browser - which makes the AI call itself - knows whether
                 # to attach the screenshot and whether to ask for JSON. One table, in Python, under test.
                 "model_capabilities": {m: dict(MODEL_CAPABILITIES.get(m, {}))

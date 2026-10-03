@@ -6,7 +6,8 @@ so each piece is captured for real - the page in one capture, the panel in anoth
 the sizes Chrome shows them at. Nothing is drawn or faked: what appears in the images is what the
 extension actually produced for that page.
 
-    python -m aura.tools.listing_art
+    python -m aura.tools.listing_art                     with the built-in demo provider
+    python -m aura.tools.listing_art --provider groq     with a real model, if a key is available
 
 Writes to dist/listing/:
     screenshot-1-findings.png     the panel beside the scanned page, findings listed
@@ -18,8 +19,11 @@ The first three need Chrome and the Test Lab; the tile is drawn and needs neithe
 """
 import base64
 import io
+import json
 import sys
 from pathlib import Path
+
+from aura.config.models import DEFAULT_MODELS
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "dist" / "listing"
@@ -90,8 +94,15 @@ def promo_tile() -> bytes:
     return buf.getvalue()
 
 
-def screenshots() -> int:
-    """Scans a Test Lab page with the real extension and composites three listing images."""
+def screenshots(provider: str = "mock") -> int:
+    """
+    Scans a Test Lab page with the real extension and composites three listing images.
+
+    With a real provider the findings in the picture are a real model's, which is what the listing should
+    show: Mock AI's are scripted, and a screenshot of scripted output oversells nothing but describes
+    nothing either. The key is found the same way tests/live_provider_check.py finds it and is never
+    printed.
+    """
     sys.path.insert(0, str(ROOT))
     sys.path.insert(0, str(ROOT / "tests"))
     import threading
@@ -120,7 +131,18 @@ def screenshots() -> int:
     try:
         ext = h.load_extension(str(ROOT / "extension"))
         options = h.extension_page(ext)
-        h.evaluate(options, f"chrome.storage.local.set({{backendUrl: 'http://127.0.0.1:8765', token: '{token}'}})")
+        settings_js = {"backendUrl": "http://127.0.0.1:8765", "token": token}
+        if provider != "mock":
+            sys.path.insert(0, str(ROOT / "tests"))
+            from live_provider_check import find_key
+            key, source = find_key(provider)
+            if not key:
+                raise RuntimeError(f"no API key found for {provider}; run with the default demo provider "
+                                   f"or set its key")
+            print(f"  using {provider} / {DEFAULT_MODELS[provider]} (key from {source})")
+            settings_js.update({"aiProvider": provider, "aiModel": DEFAULT_MODELS[provider],
+                                "providerKeys": {provider: key}})
+        h.evaluate(options, f"chrome.storage.local.set({json.dumps(settings_js)})")
         tab = h.open_tab(page_url, new_window=True)
         h.click_toolbar_action(ext, tab)
         panel = SidePanel(h, ext)
@@ -177,6 +199,9 @@ def screenshots() -> int:
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    provider = "mock"
+    if "--provider" in argv:
+        provider = argv[argv.index("--provider") + 1]
     OUT.mkdir(parents=True, exist_ok=True)
     print("Listing artwork")
     (OUT / "promo-440x280.png").write_bytes(promo_tile())
@@ -185,7 +210,7 @@ def main(argv=None) -> int:
         return 0
     print("  scanning a Test Lab page with the real extension for the screenshots")
     try:
-        made = screenshots()
+        made = screenshots(provider)
     except Exception as e:
         print(f"  screenshots not produced: {type(e).__name__}: {e}")
         print("  the tile is still written; rerun with Chrome available for the screenshots")

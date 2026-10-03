@@ -965,7 +965,8 @@ async function doAsk(ev) {
 let providerList = [];
 
 function providerRow(p) {
-  return h("option", { value: p.provider }, p.label);
+  // The price is part of the choice: someone with no key should see which two cost nothing to try.
+  return h("option", { value: p.provider }, p.pricing ? `${p.label} - ${p.pricing}` : p.label);
 }
 
 async function refreshProviders() {
@@ -997,9 +998,11 @@ async function applyProviderFields(providerKey, model) {
   $("provider-key").placeholder = storedKey
     ? "A key is saved in this browser. Type a new one to replace it, or save empty to remove it."
     : "Your key. Saved in this browser only, sent only to this provider.";
+  const free = p && p.pricing === "free tier";
   $("provider-status").textContent = isMock
     ? "Mock AI returns scripted findings for demos and tests. It is not real model analysis."
-    : (storedKey ? "" : "No API key yet: add one, then test the connection.")
+    : (storedKey ? "" : (free ? `${p.label} has a free tier: get a key, paste it here, then test the connection.`
+                              : `${p.label} needs a funded account. Groq and Gemini are free to try.`))
       + (p && p.model_capabilities && chosenModel && p.model_capabilities[chosenModel]
          && p.model_capabilities[chosenModel].image_input === false
          ? " This model cannot be shown images, so the scan will send text evidence only." : "");

@@ -48,6 +48,10 @@ Extension end-to-end checks (the real, unmodified extension in Chromium, with re
 `python tests/extension_browser_ai_e2e.py` — the last one drives a whole scan with the AI call made in the
 browser, against a stand-in for the provider, so it costs no API credit.
 
+`python tests/live_provider_check.py` is the one check that spends real tokens: it lets the extension
+call Groq, Gemini, OpenAI or Anthropic for real, with your own key, and reports which of them have
+actually been proved end to end. `--no-scan` runs the key checks only, which cost nothing.
+
 Deploying it: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Submitting it to the Chrome Web Store:
 [docs/STORE-LISTING.md](docs/STORE-LISTING.md).
 
@@ -90,7 +94,10 @@ Deploying it: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Submitting it to the Chr
 - **Backend / Core**: Python 3.12
 - **Browser Automation**: Playwright (Chromium)
 - **Accessibility Engine**: axe-core
-- **AI Multimodal Providers**: Google Gemini (`gemini-2.0-flash`), OpenAI (`gpt-4o`), Anthropic (`claude-3.5-sonnet`), and offline `MockAIProvider`
+- **AI Multimodal Providers**: Groq (`qwen/qwen3.8-27b`) and Google Gemini (`gemini-3.6-flash`), both
+  with a free tier and the two AURA recommends; OpenAI (`gpt-6-luna`) and Anthropic (`claude-haiku-4-5`)
+  for anyone with a funded account; and the offline `MockAIProvider`. Model ids are registered in
+  `aura/config/models.py` with the capabilities the browser reads to decide whether to send the screenshot.
 - **Data Models**: Pydantic v2
 - **Testing & Benchmark**: pytest, `scratch/run_benchmark.py`
 

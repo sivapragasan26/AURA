@@ -27,7 +27,7 @@ from aura.verification.verifier import FindingVerifier
 
 GROQ_KEY = "gsk_TestFakeKeyDoNotLeak0123456789"
 GEMINI_KEY = "AIzaSyTestFakeKeyDoNotLeak00000"
-GROQ_MODEL = "qwen/qwen3.6-27b"
+GROQ_MODEL = "qwen/qwen3.8-27b"
 DAILY_429 = ("429 RESOURCE_EXHAUSTED. Rate limit exceeded for model gemini-3.6-flash "
              "(limit: 20 requests per day on Free Tier)")
 GROQ_HEADERS = {
