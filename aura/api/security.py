@@ -109,6 +109,18 @@ def accepted(api_token: str, supplied: Optional[str]) -> bool:
     return token_matches(api_token, supplied) or install_token_valid(api_token, supplied)
 
 
+def token_is_from_environment() -> bool:
+    """
+    Whether the server's token was given to it, rather than invented at startup.
+
+    The token signs every install token, so a server that invents one per process invalidates every
+    install on every restart. On a platform that restarts a service whenever it sleeps, redeploys or
+    moves, that is a service whose users are logged out at random. Reported by /api/health as a boolean,
+    so an operator can see it without anyone revealing a secret.
+    """
+    return bool(os.getenv("AURA_API_TOKEN", "").strip())
+
+
 def install_id(api_token: str, supplied: Optional[str]) -> str:
     """
     Who presented this token, as a short non-reversible id.

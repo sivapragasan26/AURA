@@ -366,8 +366,46 @@ def test_a_web_page_still_cannot_reach_health():
     r = client.get("/api/health", headers=page)
     assert r.status_code == 403 and r.json()["error"]["code"] == "ORIGIN_NOT_ALLOWED"
 
-    # And what the probe can read carries nothing worth stealing.
+    # And what the probe can read carries nothing worth stealing: a version, some booleans, and no
+    # secret. Health may SAY whether a token is configured; it may never carry the token itself.
     body = client.get("/api/health", headers={"Host": "10.1.2.3:10000"}).json()
     assert body["paired"] is False
-    assert not [k for k in str(body).lower().split() if "key=" in k]
-    assert "token" not in str(body).lower()
+    assert "origin-token" not in str(body), "the server's own token leaked into health"
+    assert isinstance(body.get("token_from_environment"), bool)
+
+
+def test_health_says_whether_the_token_was_configured(monkeypatch):
+    """
+    Without AURA_API_TOKEN the server invents a token per process, and that token signs every install
+    token - so every restart logs every install out, silently, on a platform that restarts a service
+    whenever it sleeps or redeploys. An operator cannot see that from outside, and "I set the variable"
+    is not the same as "the running process has it". Health reports the fact as a boolean; the token
+    itself never leaves.
+    """
+    from starlette.testclient import TestClient
+
+    from aura.api.server import create_app
+    from aura.api.store import AuditStore
+
+    monkeypatch.delenv("AURA_API_TOKEN", raising=False)
+    body = TestClient(create_app(token="invented", store=AuditStore())).get(
+        "/api/health", headers={"Host": "127.0.0.1"}).json()
+    assert body["token_from_environment"] is False
+
+    monkeypatch.setenv("AURA_API_TOKEN", "a-real-one-from-the-secret-store")
+    body = TestClient(create_app(token="a-real-one-from-the-secret-store", store=AuditStore())).get(
+        "/api/health", headers={"Host": "127.0.0.1"}).json()
+    assert body["token_from_environment"] is True
+    assert "a-real-one-from-the-secret-store" not in str(body), "health must never carry the token itself"
+
+
+def test_an_install_token_survives_a_restart_only_when_the_secret_is_given(monkeypatch):
+    """The reason the boolean above matters, stated as behaviour."""
+    from aura.api import security
+
+    monkeypatch.setenv("AURA_API_TOKEN", "stable-secret-from-the-dashboard")
+    issued = security.issue_install_token("stable-secret-from-the-dashboard")
+    # A restart: same configured secret, new process.
+    assert security.install_token_valid("stable-secret-from-the-dashboard", issued)
+    # A server that invented its own token has a different one after a restart, and the install is lost.
+    assert not security.install_token_valid("a-different-invented-token", issued)

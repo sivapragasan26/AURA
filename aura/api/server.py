@@ -200,6 +200,11 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
             "engine_version": ENGINE_VERSION,
             "api_version": API_VERSION,
             "paired": security.accepted(api_token, request.headers.get(security.TOKEN_HEADER)),
+            # Whether this deployment's token came from its environment, never the token itself. An
+            # operator cannot otherwise tell: without AURA_API_TOKEN the server invents one per process,
+            # which signs every install token, so every restart silently logs every install out. False
+            # here on a hosted service means that is happening.
+            "token_from_environment": security.token_is_from_environment(),
             "ai": {"provider": provider_key, "label": PROVIDER_LABELS.get(provider_key, provider_key),
                    "is_mock": provider_key == "mock",
                    "model": getattr(provider, "model", model), "configured": pf.status != "NOT_CONFIGURED",
