@@ -184,7 +184,11 @@ async function refreshHealth() {
     $("ask-cost").textContent = ai.isMock ? "needs a real AI provider" : "1 AI request per question";
   } catch (e) {
     state.health = null;
-    pill.className = "pill pill-err"; pill.textContent = local ? "Server offline" : "AURA service unreachable";
+    // A hosted service that has gone to sleep is not a service that is down, and saying so would be
+    // both wrong and alarming. It wakes on the first request; the scan after this one will work.
+    const waking = !local && e.code === "TIMEOUT";
+    pill.className = waking ? "pill pill-warn" : "pill pill-err";
+    pill.textContent = waking ? "Service waking…" : (local ? "Server offline" : "AURA service unreachable");
     pill.title = e.message;
     $("ai-provider").textContent = ai.isMock ? ai.label : `${ai.label}${ai.model ? " · " + ai.model : ""}`;
     $("privacy").textContent = privacyLine(ai, backendUrl, local);

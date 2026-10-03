@@ -65,15 +65,37 @@ function unreachable(backendUrl) {
       + "on your own machine in Settings.";
 }
 
+// A hosted service may be asleep. A free instance stops after a quiet spell and takes the best part of a
+// minute to come back, so the first request after that is slow rather than broken; a server on this
+// machine that has not answered in fifteen seconds really is not there.
+export const WAKE_TIMEOUT_MS = 60000;
+const QUICK_TIMEOUT_MS = 15000;
+const quickTimeout = (backendUrl) => (isLocal(backendUrl) ? QUICK_TIMEOUT_MS : WAKE_TIMEOUT_MS);
+
+function timedOut(backendUrl, ms) {
+  return isLocal(backendUrl)
+    ? "The AURA server did not respond in time."
+    : `The AURA service did not answer within ${Math.round(ms / 1000)}s. A free instance sleeps when it `
+      + "is not in use and takes a moment to wake; try again shortly.";
+}
+
 // First use: ask the service for this install's own token. Nothing identifies you in the request.
 async function register(backendUrl) {
   let res;
+  // A bare fetch here would wait as long as the browser feels like, which on a sleeping service means a
+  // panel that appears to hang on its very first use.
+  const ctrl = new AbortController();
+  const budget = quickTimeout(backendUrl);
+  const timer = setTimeout(() => ctrl.abort(), budget);
   try {
     res = await fetch(`${backendUrl}/api/register`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal: ctrl.signal,
     });
   } catch (e) {
-    throw new ApiError(unreachable(backendUrl), { code: "UNREACHABLE" });
+    throw new ApiError(e.name === "AbortError" ? timedOut(backendUrl, budget) : unreachable(backendUrl),
+      { code: e.name === "AbortError" ? "TIMEOUT" : "UNREACHABLE" });
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -102,7 +124,7 @@ async function request(path, { method = "GET", body = undefined, timeoutMs = 180
     });
   } catch (e) {
     throw new ApiError(
-      e.name === "AbortError" ? "The AURA server did not respond in time." : unreachable(backendUrl),
+      e.name === "AbortError" ? timedOut(backendUrl, timeoutMs) : unreachable(backendUrl),
       { code: e.name === "AbortError" ? "TIMEOUT" : "UNREACHABLE" });
   } finally {
     clearTimeout(timer);
@@ -124,7 +146,7 @@ async function request(path, { method = "GET", body = undefined, timeoutMs = 180
 }
 
 export const api = {
-  health: () => request("/api/health", { timeoutMs: 15000 }),
+  health: async () => request("/api/health", { timeoutMs: quickTimeout((await getSettings()).backendUrl) }),
   interactionPlan: (pageUrl, elements) => request("/api/interaction-plan", { method: "POST", body: { page_url: pageUrl, elements } }),
   // Two-phase scan: the server prepares the prompt, the browser calls the provider, the server verifies.
   prepareAudit: (bundle, screenshotAttached) =>

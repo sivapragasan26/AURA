@@ -91,3 +91,31 @@ def test_every_module_import_resolves_to_a_real_export():
                 if name and name not in exports[target]:
                     problems.append(f"{path.name} imports '{name}' from {target}, which does not export it")
     assert not problems, "; ".join(problems)
+
+
+def test_the_panel_waits_long_enough_for_a_sleeping_service():
+    """
+    A free hosted instance stops after a quiet spell and takes the best part of a minute to come back.
+    If the panel gives up sooner it tells the user the service is unreachable, which is both wrong and
+    the kind of thing that earns a one-star review. The real cold start is timed against the deployment
+    (docs/DEPLOYMENT.md); this holds the decisions that make that behave.
+    """
+    api = (EXT / "sidepanel" / "api.js").read_text(encoding="utf-8")
+    panel = (EXT / "sidepanel" / "panel.js").read_text(encoding="utf-8")
+
+    wake = re.search(r"WAKE_TIMEOUT_MS\s*=\s*(\d+)", api)
+    assert wake and int(wake.group(1)) >= 45000, (
+        "the waking budget must outlast a cold start; a free Render instance takes 30-60s")
+
+    assert "health: async () => request" in api and "quickTimeout" in api, (
+        "health must use the waking budget for a hosted backend, not a fixed short one")
+    assert not re.search(r'health:.*timeoutMs:\s*\d+', api), (
+        "health has a hard-coded timeout again, which cannot distinguish a sleeping service from a dead one")
+
+    # register() is the very first request a new install makes; a bare fetch there hangs the panel.
+    register = api[api.index("async function register("):api.index("async function request(")]
+    assert "AbortController" in register and "AbortError" in register, (
+        "register() must time out and say so, rather than waiting on the browser's own patience")
+
+    assert 'e.code === "TIMEOUT"' in panel and "waking" in panel.lower(), (
+        "a hosted service that timed out is waking, not unreachable, and the panel must say so")

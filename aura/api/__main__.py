@@ -29,9 +29,10 @@ def main() -> None:
         # Printing the token is a convenience for a server only this machine can reach. On a hosted
         # deployment the same line would put a shared secret into the platform's log stream, so it is
         # printed only when the bind address is local.
-        print(" Pairing token (paste into the AURA extension > Settings):")
+        print(" Access token, if you point the extension here by hand (Settings):")
         print(f"   {token}")
-        print(" The token is stored in .aura_api_token (git-ignored). Provider API keys stay on this server.")
+        print(" Stored in .aura_api_token (git-ignored). Your AI provider key stays in the extension and")
+        print(" goes only to that provider: this server never receives one.")
     else:
         print(f" Reachable on: {', '.join(sorted(security.allowed_hosts()))}")
         print(" Token not printed: set AURA_API_TOKEN and read it from your platform's secret store.")
