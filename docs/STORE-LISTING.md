@@ -100,13 +100,22 @@ provider for real. As of 3 October 2026:
 
 | Provider | Price | Live check |
 |---|---|---|
-| Groq `qwen/qwen3.8-27b` | free tier | **Passed end to end** - key accepted, scan returned `AI_OK`, 7 findings of which 2 were the model's own and survived verification, 8.5 s |
-| Gemini `gemini-3.6-flash` | free tier | **Not yet run** - needs a key from AI Studio (free). This is the release gate: Gemini is free, so most users will be on it |
+| Groq `qwen/qwen3.8-27b` | free tier | **Passed end to end** - 8 findings, 3 of them the model's own and confirmed by verification, 7.0 s |
+| Gemini `gemini-3.6-flash` | free tier | **Passed end to end** - 6 findings, 1 of them the model's own and confirmed, 15.9 s |
 | OpenAI `gpt-6-luna` | paid account | Not run. Ids and request shape corrected; no funded account to test with |
 | Anthropic `claude-haiku-4-5` | paid account | Not run. Same |
 
+Two things that run taught us, both now handled:
+
+- Gemini's **first** real call came back "This model is currently experiencing high demand ... usually
+  temporary", and the scan was lost. The browser client now retries once on a transient refusal and the
+  finished scan records that it did, so a slow scan explains itself. Covered without spending anything
+  by `tests/extension_browser_ai_e2e.py`, whose stand-in reproduces that exact reply.
+- `gemini-3.5-flash-lite` is faster (8-10 s) but every candidate it proposed was rejected by
+  verification, twice. `gemini-3.6-flash` stays the default: slower, and worth it.
+
 A provider that fails for a user does not break the scan: the deterministic findings still come back and
-the panel names the provider error. That behaviour is covered by `tests/extension_browser_ai_e2e.py`.
+the panel names the provider error.
 
 ## Before pressing submit
 

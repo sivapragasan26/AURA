@@ -138,6 +138,14 @@ def build_app():
     async def stub(request: Request):
         auth = request.headers.get("authorization") or ""
         body = await request.json()
+        if STUB_STATE["mode"] == "overloaded_once":
+            # What Gemini actually answered on AURA's first real call to it. It passes on its own, so
+            # the client should try once more rather than spending the whole scan on it.
+            STUB_STATE["mode"] = "ok"
+            return JSONResponse(
+                {"error": {"message": "This model is currently experiencing high demand. Spikes in "
+                                      "demand are usually temporary. Please try again later."}},
+                status_code=503)
         if STUB_STATE["mode"] == "rate_limited":
             return JSONResponse({"error": {"message": "Rate limit reached for requests per day"}},
                                 status_code=429, headers={"retry-after": "60"})
@@ -343,6 +351,26 @@ def main():
             check(after == len(sent), "showing the screenshot made no request to AURA at all")
             panel.click(".act-close")
             check(waited(panel, "!document.querySelector('.shot')", 10), "the screenshot panel closes")
+
+        # ---- a provider that is briefly overloaded ----------------------------------------------------
+        # The first live Gemini call AURA ever made came back "experiencing high demand"; the retry is
+        # what turns that from a wasted scan into a slower one.
+        STUB_STATE["mode"] = "overloaded_once"
+        before_requests = len(STUB_STATE["requests"])
+        h.evaluate(panel.session, "window.__sent = []")
+        h.activate(tab)
+        panel.scan(timeout=300)
+        steps_retry = panel.js("document.getElementById('steps').textContent")
+        findings_retry = panel.js("document.querySelectorAll('#findings .finding').length")
+        check("succeeded on retry" in steps_retry.lower(),
+              f"the finished scan records that it took a retry ({steps_retry[-200:]})")
+        check(len(STUB_STATE["requests"]) == before_requests + 1,
+              f"the provider was called again after the transient failure "
+              f"({len(STUB_STATE['requests']) - before_requests} successful calls)")
+        check(findings_retry > 0, f"the retry rescued the scan ({findings_retry} findings)")
+        completed = [s for s in h.evaluate(panel.session, "window.__sent") if "/complete" in s["url"]]
+        check(len(completed) == 1 and '"response"' in (completed[0].get("body") or ""),
+              "the scan was completed with the model's answer, not with a failure")
 
         # ---- a provider that refuses ----------------------------------------------------------------
         STUB_STATE["mode"] = "rate_limited"

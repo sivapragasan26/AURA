@@ -128,24 +128,22 @@ function failureMessage(status, reply, label) {
   return `${label} returned HTTP ${status}.`;
 }
 
-/**
- * Calls the chosen provider with the prompt the AURA server prepared.
- *
- * Returns { response, meta } where response is the model's raw text, exactly as received — parsing and
- * verification are the server's job. Throws ProviderCallError when the provider refused or was unreachable;
- * the caller reports that to the server, which records the scan as having no AI analysis rather than
- * pretending the model found nothing.
- */
-export async function callProvider({ provider, model, apiKey, prompt, image = null, mime = "image/png",
-                                     jsonMode = true, timeoutMs = 180000 }) {
-  const spec = PROVIDERS[provider];
-  if (!spec) throw new ProviderCallError(`AURA cannot call '${provider}' from the browser.`);
-  if (!apiKey) throw new ProviderCallError(`No ${spec.label} API key. Add one in AURA's settings.`, { status: 401 });
+// Worth trying once more, or not. A free model under load answers "this model is currently experiencing
+// high demand ... usually temporary" - seen on the first real Gemini call AURA ever made - and throwing
+// that straight at the user wastes a scan that would have worked seconds later. A rejected key or an
+// unknown model will never succeed on a second attempt and must not be retried.
+function worthRetrying(error) {
+  if ([429, 500, 502, 503, 504].includes(error.status)) return true;
+  if (error.status === 0) return true;   // the request never arrived
+  return /high demand|overload|temporar|try again|unavailable/i.test(error.message || "");
+}
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function attemptCall(spec, { model, apiKey, prompt, image, mime, jsonMode, timeoutMs }) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res;
-  const started = Date.now();
   try {
     res = await fetch(spec.url(model), {
       method: "POST",
@@ -172,18 +170,59 @@ export async function callProvider({ provider, model, apiKey, prompt, image = nu
   }
   const text = spec.text(reply);
   if (!text || !text.trim()) {
-    throw new ProviderCallError(`${spec.label} returned an empty response.`, { status: res.status });
+    // A reply with no text is not an empty answer: the model stopped for a reason it states, and the
+    // reason is what the person needs to read.
+    const stop = reply?.candidates?.[0]?.finishReason || reply?.promptFeedback?.blockReason
+                 || reply?.choices?.[0]?.finish_reason || reply?.stop_reason;
+    throw new ProviderCallError(
+      stop ? `${spec.label} returned no text (${stop}).` : `${spec.label} returned an empty response.`,
+      { status: res.status });
   }
-  return {
-    response: text,
-    meta: {
-      http_status: res.status,
-      actual_model: spec.model(reply) || model,
-      attempt_count: 1,
-      retry_count: 0,
-      elapsed_ms: Date.now() - started,
-    },
-  };
+  return { text, model: spec.model(reply) || model, status: res.status };
+}
+
+/**
+ * Calls the chosen provider with the prompt the AURA server prepared.
+ *
+ * Returns { response, meta } where response is the model's raw text, exactly as received — parsing and
+ * verification are the server's job. Throws ProviderCallError when the provider refused or was unreachable;
+ * the caller reports that to the server, which records the scan as having no AI analysis rather than
+ * pretending the model found nothing.
+ *
+ * One retry, for conditions that pass on their own. `onRetry` is told about it so the panel can say so
+ * rather than appearing to hang.
+ */
+export async function callProvider({ provider, model, apiKey, prompt, image = null, mime = "image/png",
+                                     jsonMode = true, timeoutMs = 180000, onRetry = null }) {
+  const spec = PROVIDERS[provider];
+  if (!spec) throw new ProviderCallError(`AURA cannot call '${provider}' from the browser.`);
+  if (!apiKey) throw new ProviderCallError(`No ${spec.label} API key. Add one in AURA's settings.`, { status: 401 });
+
+  const started = Date.now();
+  const args = { model, apiKey, prompt, image, mime, jsonMode, timeoutMs };
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const got = await attemptCall(spec, args);
+      return {
+        response: got.text,
+        meta: {
+          http_status: got.status,
+          actual_model: got.model,
+          attempt_count: attempt,
+          retry_count: attempt - 1,
+          elapsed_ms: Date.now() - started,
+        },
+      };
+    } catch (e) {
+      const last = attempt === 2;
+      if (last || !(e instanceof ProviderCallError) || !worthRetrying(e)) throw e;
+      // The provider's own Retry-After wins, within reason; otherwise a short wait.
+      const wait = Math.min(Math.max((e.retryAfter || 0) * 1000, 2500), 15000);
+      if (onRetry) onRetry(e, wait);
+      await sleep(wait);
+    }
+  }
+  throw new ProviderCallError(`${spec.label} could not be reached.`);   // unreachable; the loop returns or throws
 }
 
 

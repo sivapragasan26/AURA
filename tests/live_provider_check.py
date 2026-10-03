@@ -157,9 +157,11 @@ class Result:
         return self.key_check == "READY" and self.scan in ("AI_OK", "not run")
 
 
-def run_provider(h, panel, tab, provider, key, source, do_scan):
+def run_provider(h, panel, tab, provider, key, source, do_scan, override=None):
     r = Result(provider)
     r.source = source
+    if override:
+        r.model = override
     model = r.model
     caps = MODEL_CAPABILITIES.get(model, {})
 
@@ -226,6 +228,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--provider", choices=ORDER, help="only this provider")
     ap.add_argument("--no-scan", action="store_true", help="key checks only; spends nothing")
+    ap.add_argument("--model", help="try this model instead of the provider's default")
     args = ap.parse_args()
     wanted = [args.provider] if args.provider else ORDER
 
@@ -268,9 +271,10 @@ def main():
                 results.append(r)
                 continue
             key, source = keys[provider]
-            print(f"\n--- {provider} / {DEFAULT_MODELS[provider]} ---", flush=True)
+            print("")
+            print(f"--- {provider} / {args.model or DEFAULT_MODELS[provider]} ---", flush=True)
             try:
-                r = run_provider(h, panel, tab, provider, key, source, not args.no_scan)
+                r = run_provider(h, panel, tab, provider, key, source, not args.no_scan, args.model)
             except Exception as e:
                 r = Result(provider)
                 r.key_check = "error"
@@ -279,6 +283,7 @@ def main():
             print(f"    key check: {r.key_check} - {r.key_detail[:120]}")
             if r.scan != "-":
                 print(f"    scan: {r.scan} - {r.findings} findings ({r.ai_findings} from the model) in {r.ms} ms")
+                print(f"    {r.detail[:200]}")
     finally:
         h.close()
         api.should_exit = True

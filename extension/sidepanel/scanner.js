@@ -224,9 +224,15 @@ async function analyse({ bundle, useAI, image, step }) {
     answer = await callProvider({
       provider: choice.provider, model: choice.model, apiKey, prompt: prepared.prompt,
       image: attach ? image.base64 : null, jsonMode: caps.json_mode !== false,
+      // A free model under load answers "try again shortly". Say so, rather than appearing to hang.
+      onRetry: (err, wait) => step(`Asking ${label} (your key, straight from this browser)`, "running",
+                                   `${err.message} Trying once more in ${Math.round(wait / 1000)}s.`),
     });
+    // The retry stays in the record: it explains a scan that took twice as long, and a provider that
+    // needs retrying often is worth knowing about.
+    const retried = answer.meta.retry_count ? ` · succeeded on retry ${answer.meta.retry_count + 1}` : "";
     step(`Asking ${label} (your key, straight from this browser)`, "done",
-      `${detail} · ${Math.round(answer.response.length / 1024)} KB answer`);
+      `${detail} · ${Math.round(answer.response.length / 1024)} KB answer${retried}`);
   } catch (e) {
     if (!(e instanceof ProviderCallError)) throw e;
     failure = { http_status: e.status, message: e.message, retry_after_seconds: e.retryAfter };
