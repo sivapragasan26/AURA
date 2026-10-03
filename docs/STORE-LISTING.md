@@ -46,7 +46,7 @@ permission justification is the reason a reviewer needs; vague answers are the u
 | `scripting` | The audit runs three scripts in the scanned tab on demand: a DOM extraction script that reads structure, geometry and computed styles; axe-core, to produce the accessibility results; and a small agent that highlights an element when the user presses Highlight. All three are in the package — no remote code is fetched or executed. |
 | `sidePanel` | The entire interface is a side panel, so the audit sits beside the page it is about rather than in a popup that closes. |
 | `storage` | Holds the user's own settings: which AI provider and model to use, that provider's API key, and the address of the AURA server. The key is stored here precisely so it can go straight to the provider without passing through our service. |
-| Host access to `https://aura-api.onrender.com/` | The AURA service that verifies findings against the collected evidence. |
+| Host access to `https://aura-api-vs7e.onrender.com/` | The AURA service that verifies findings against the collected evidence. |
 | Host access to `http://127.0.0.1:8765/` and `http://localhost:8765/` | For users who run AURA's open-source server on their own machine instead, so no page data leaves their computer. |
 | Host access to `api.groq.com`, `api.openai.com`, `generativelanguage.googleapis.com`, `api.anthropic.com` | The four AI providers a user can choose. The extension calls whichever one they picked with their own key, so the key never reaches our server. Only the chosen provider is ever contacted. |
 
@@ -121,7 +121,7 @@ the panel names the provider error.
 
 1. `python -m aura.tools.package_extension` — builds the zip and refuses to build a broken one.
 2. Confirm the privacy policy URL opens in a private window.
-3. Confirm `aura-api.onrender.com` (or whatever the service is finally called) matches
+3. Confirm `aura-api-vs7e.onrender.com` (or whatever the service is finally called) matches
    `extension/sidepanel/api.js`, `extension/manifest.json` and `render.yaml`. These three must agree, and
    `tests/test_hosted_deployment.py` checks that they do.
 4. $5 one-time developer registration fee, if the account is new.

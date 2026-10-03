@@ -9,6 +9,7 @@ These tests pin both halves: the local default is unchanged, and the hosted swit
 """
 import importlib
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -19,7 +20,10 @@ from aura.api.store import AuditStore
 from aura.config import settings
 
 ROOT = Path(__file__).resolve().parents[1]
-HOSTED_HOST = "aura-api.onrender.com"
+# The deployed host, read from the one file that declares it, so these tests follow a rename instead of
+# being a fifth place it has to be changed.
+HOSTED_HOST = re.search(r'HOSTED_BACKEND\s*=\s*"https://([^"/]+)"',
+                        (ROOT / "extension" / "sidepanel" / "api.js").read_text(encoding="utf-8")).group(1)
 
 
 # ---------------------------------------------------------------------------------------------------

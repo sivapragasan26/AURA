@@ -22,8 +22,11 @@ def test_manifest_is_least_privilege():
     # Host access is allowed to exactly three kinds of place and nowhere else: the AURA service, an AURA
     # server on this machine, and the four AI providers the browser now calls itself. Pages being scanned
     # are reached through activeTab, on a user gesture, and never appear here.
+    hosted = re.search(r'HOSTED_BACKEND\s*=\s*"(https://[^"/]+)"',
+                       (EXT / "sidepanel" / "api.js").read_text(encoding="utf-8"))
+    assert hosted, "api.js no longer declares HOSTED_BACKEND"
     allowed = {
-        "https://aura-api.onrender.com/*",
+        f"{hosted.group(1)}/*",
         "http://127.0.0.1:8765/*",
         "http://localhost:8765/*",
         "https://api.groq.com/*",

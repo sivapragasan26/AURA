@@ -9,7 +9,7 @@
 // step. A self-hosted AURA server can still be paired by hand from the options page.
 
 // The hosted service. Change it in Settings to run AURA on your own machine instead.
-export const HOSTED_BACKEND = "https://aura-api.onrender.com";
+export const HOSTED_BACKEND = "https://aura-api-vs7e.onrender.com";
 export const LOCAL_BACKEND = "http://127.0.0.1:8765";
 export const DEFAULT_BACKEND = HOSTED_BACKEND;
 

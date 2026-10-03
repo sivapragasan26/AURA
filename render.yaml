@@ -22,7 +22,7 @@ services:
       - key: AURA_API_HOST
         value: 0.0.0.0
       - key: AURA_ALLOWED_HOSTS
-        value: aura-api.onrender.com
+        value: aura-api-vs7e.onrender.com
       - key: AI_PROVIDER
         value: mock
       - key: AURA_API_TOKEN
