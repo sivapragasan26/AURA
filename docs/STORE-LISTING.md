@@ -6,8 +6,8 @@ permission justification is the reason a reviewer needs; vague answers are the u
 ## Listing
 
 - **Name:** AURA — UI/UX Runtime Assurance
-- **Short description (132 max):** Scan the page you are on for UI, UX, accessibility and runtime
-  problems. Every finding is checked against the evidence.
+- **Short description (132 max):** Free UI, UX and accessibility audit of the page you are on. Every
+  finding is checked against the evidence. Bring your own AI key.
 - **Category:** Developer Tools
 - **Language:** English
 - **Privacy policy URL:** the hosted copy of [`docs/privacy.html`](privacy.html). Enable GitHub Pages for
@@ -32,11 +32,15 @@ permission justification is the reason a reviewer needs; vague answers are the u
 > the element on the page; Screenshot shows the problem cropped out of the capture with the element
 > outlined; Explain describes the problem without jargon; Ask AURA answers questions about it.
 >
-> Bring your own AI key — Groq, OpenAI, Gemini or Anthropic — and your browser calls that provider
-> directly. The key stays in the extension and the AURA service never receives it. Screenshots never
-> leave your browser. You can also run AURA's server on your own machine and keep everything local.
+> AURA itself is free, with no account and nothing to pay. Try it straight away with the built-in demo
+> provider, which needs no key at all.
 >
-> Free, no account, no tracking, no ads.
+> For real analysis, bring your own AI key. Groq and Gemini both have a free tier, so AURA can cost you
+> nothing; OpenAI and Anthropic work too if you already pay for one. Your browser calls the provider
+> directly: the key stays in the extension and the AURA service never receives it. Screenshots never
+> leave your browser either. You can also run AURA's server on your own machine and keep everything local.
+>
+> No account, no tracking, no ads, no paid tier.
 
 ## Permission justifications
 

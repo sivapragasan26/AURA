@@ -94,11 +94,15 @@ In your browser:
 - It runs no remote code: everything the extension executes is in the package Chrome installed.
 - It does not use what you scan to train anything. AURA has no model of its own to train.
 
-## Running it entirely on your own machine
+## Optional: running it entirely on your own machine
 
-AURA's server is open and can be run locally. Point the backend at `http://127.0.0.1:8765` in the
-extension's settings and start it with `python -m aura.api`: the evidence then never leaves your computer,
-and the only thing that goes out is your browser's call to your AI provider — which you can also avoid by
+**You do not need to do this.** AURA works as soon as you install it, against the hosted service described
+above, with nothing to set up and nothing to run.
+
+It is offered for people who would rather no page data left their computer at all. AURA's server is open
+source, so you can run it yourself: start it with `python -m aura.api` and point the backend at
+`http://127.0.0.1:8765` in the extension's settings. The evidence then never leaves your machine, and the
+only thing that goes out is your browser's call to your AI provider — which you can also avoid by
 selecting Mock AI.
 
 ## Children
