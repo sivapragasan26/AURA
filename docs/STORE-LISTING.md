@@ -15,6 +15,8 @@ permission justification is the reason a reviewer needs; vague answers are the u
   `https://sivapragasan26.github.io/AURA/privacy.html`. A reviewer must be able to open it: do not point
   this at the Render service, whose free tier sleeps.
 - **Support URL:** <https://github.com/sivapragasan26/AURA/issues>
+- **Licence:** MIT ([LICENSE](../LICENSE)); axe-core keeps the MPL 2.0, see
+  [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md)
 
 ### Detailed description
 

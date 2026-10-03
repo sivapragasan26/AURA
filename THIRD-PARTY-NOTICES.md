@@ -1,5 +1,8 @@
 # Third-party notices
 
+AURA itself is under the MIT licence ([LICENSE](LICENSE)). The components below are other people's work
+and keep their own terms.
+
 AURA ships one third-party component inside the extension and uses several Python packages on the server.
 The component shipped inside the extension is listed first, because that is the one distributed to users
 through the Chrome Web Store.
