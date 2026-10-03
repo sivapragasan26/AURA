@@ -16,20 +16,40 @@ Unlike platforms that blindly trust LLM design opinions, AURA treats AI output a
 AURA runs as a Chrome side panel that scans **the page you are on**, including localhost, staging and pages
 you are signed in to. You don't need to paste a URL. See [docs/architecture.md](docs/architecture.md).
 
-1. Start the local AURA engine API (it binds to 127.0.0.1 and prints a pairing token):
-   ```bash
-   python -m aura.api
-   ```
-2. In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and select the `extension/` folder.
-3. Click the AURA toolbar icon **on the tab you want to scan**. This opens the side panel and gives AURA access to
-   that tab only, until it closes or moves to another site. Each tab needs its own click.
-   Open ⚙ Settings and paste the pairing token.
-4. Click **Scan current page**. Then select a finding to use **Highlight**, **Explain** or **Ask AURA**.
+This branch is the **hosted** build: the extension talks to an AURA service rather than only to a server on
+your own machine, and **the AI call happens in your browser with your own API key**. The service verifies
+findings against the evidence and holds no credential of yours. What goes where is set out in
+[PRIVACY.md](PRIVACY.md) and enforced by `tests/test_log_privacy.py`, `tests/test_audit_isolation.py` and
+`tests/test_hosted_deployment.py`.
 
-The AI provider and its API key are configured on the server (`.env`, `AI_PROVIDER=...`) and never in the extension.
+1. In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and select the
+   `extension/` folder. (Icons are generated, not committed: run
+   `python -m aura.tools.sync_extension_assets` first, or `python -m aura.tools.package_extension` to build
+   a zip that is ready to load or submit.)
+2. Click the AURA toolbar icon **on the tab you want to scan**. This opens the side panel and gives AURA
+   access to that tab only, until it closes or moves to another site. Each tab needs its own click. There
+   is no pairing step: the extension registers itself with the service on first use.
+3. Open the **AI provider** panel, choose a provider and model, and paste your own API key. It is saved in
+   this extension's storage and sent only to that provider. Or leave **Mock AI · Demo** selected, which
+   makes no AI request at all.
+4. Click **Scan current page**. Then select a finding to use **Highlight**, **Screenshot**, **Explain** or
+   **Ask AURA**.
+
+To run the whole thing on your own machine instead, start the server with `python -m aura.api` (it binds
+127.0.0.1 and prints a token) and point the backend at `http://127.0.0.1:8765` in ⚙ Settings, pasting that
+token. Nothing then leaves the machine except your browser's call to your AI provider.
+
 After changing `aura/analyzers/js/dom_extraction.js` or `aura/vendor/axe.min.js`, run
 `python -m aura.tools.sync_extension_assets`.
-Extension end-to-end checks (real, unmodified extension in Chromium with real toolbar clicks): `python tests/extension_e2e.py` and `python tests/extension_activation_e2e.py`.
+
+Extension end-to-end checks (the real, unmodified extension in Chromium, with real toolbar clicks):
+`python tests/extension_e2e.py`, `python tests/extension_activation_e2e.py`,
+`python tests/extension_highlight_e2e.py`, `python tests/extension_infinite_scroll_e2e.py`, and
+`python tests/extension_browser_ai_e2e.py` — the last one drives a whole scan with the AI call made in the
+browser, against a stand-in for the provider, so it costs no API credit.
+
+Deploying it: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Submitting it to the Chrome Web Store:
+[docs/STORE-LISTING.md](docs/STORE-LISTING.md).
 
 ---
 

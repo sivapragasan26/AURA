@@ -285,3 +285,28 @@ def test_registration_still_requires_an_allowed_origin(api):
     """No token does not mean no checks: a web page must not be able to mint one."""
     r = api.post("/api/register", headers={"Origin": "https://evil.example"})
     assert r.status_code == 403
+
+
+def test_the_hosted_host_is_the_same_in_every_place_that_names_it():
+    """
+    Three files name the service: the blueprint that deploys it, the client that calls it, and the
+    manifest that permits calling it. A rename that misses one leaves the extension pointed at a host it
+    has no permission for, or a service that refuses its own hostname - and that failure looks like a
+    network problem rather than a typo.
+    """
+    import json as _json
+    import re as _re
+
+    blueprint = (ROOT / "render.yaml").read_text(encoding="utf-8")
+    api_js = (ROOT / "extension" / "sidepanel" / "api.js").read_text(encoding="utf-8")
+    manifest = _json.loads((ROOT / "extension" / "manifest.json").read_text(encoding="utf-8"))
+
+    declared = _re.search(r'HOSTED_BACKEND\s*=\s*"https://([^"/]+)"', api_js)
+    assert declared, "api.js no longer declares HOSTED_BACKEND"
+    host = declared.group(1)
+
+    assert f"value: {host}" in blueprint, (
+        f"render.yaml does not set AURA_ALLOWED_HOSTS to {host}: the service would refuse every request "
+        f"to its own hostname with HOST_NOT_ALLOWED")
+    assert f"https://{host}/*" in manifest["host_permissions"], (
+        f"the manifest does not permit https://{host}/*: the extension could not reach the service at all")

@@ -27,6 +27,7 @@ import threading
 import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlsplit
 
 from pydantic import ValidationError
 from starlette.applications import Starlette
@@ -103,6 +104,25 @@ def make_provider(provider: Optional[str] = None, model: Optional[str] = None):
 
 def _error(status: int, code: str, message: str, **extra) -> JSONResponse:
     return JSONResponse({"error": {"code": code, "message": message, **extra}}, status_code=status)
+
+
+def without_page(message: str, url: str = "", title: str = "") -> str:
+    """
+    The message with this page's address and title taken out.
+
+    A failure is logged so the fault can be found; the page someone was looking at is not part of that,
+    and an exception message carries whatever was at hand when it was raised. The person who scanned
+    still gets the full detail in their own answer - it is their page. Only the log is scrubbed.
+    """
+    text = str(message or "")
+    for value in (url or "", title or ""):
+        value = value.strip()
+        if len(value) > 3:
+            text = text.replace(value, "<page>")
+    host = urlsplit(url or "").netloc
+    if len(host) > 3:
+        text = text.replace(host, "<page>")
+    return text
 
 
 def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) -> Starlette:
@@ -287,7 +307,8 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         except ValueError as e:
             return _error(400, "INVALID_EVIDENCE", sanitize_provider_error(e)[:300])
         except Exception as e:
-            logger.error(f"Preparing a scan failed: {sanitize_provider_error(e)}")
+            logger.error("Preparing a scan failed: "
+                         + without_page(sanitize_provider_error(e), bundle.url, bundle.title))
             return _error(500, "SCAN_FAILED", "The AURA engine could not prepare this page for analysis.",
                           detail=sanitize_provider_error(e)[:300])
         return JSONResponse(prepared)
@@ -339,7 +360,8 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         except ValueError as e:
             return _error(400, "INVALID_EVIDENCE", sanitize_provider_error(e)[:300])
         except Exception as e:
-            logger.error(f"Completing a scan failed: {sanitize_provider_error(e)}")
+            logger.error("Completing a scan failed: "
+                         + without_page(sanitize_provider_error(e), scan.bundle.url, scan.bundle.title))
             return _error(500, "SCAN_FAILED", "The AURA engine failed to analyse this page.",
                           detail=sanitize_provider_error(e)[:300])
         audit_store.put(view, caller(request))
@@ -370,7 +392,8 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         except ValueError as e:
             return _error(400, "INVALID_EVIDENCE", sanitize_provider_error(e)[:300])
         except Exception as e:  # engine failure: report it as a failed scan, never as an empty result
-            logger.error(f"Extension audit failed: {sanitize_provider_error(e)}")
+            logger.error("Extension audit failed: "
+                         + without_page(sanitize_provider_error(e), bundle.url, bundle.title))
             return _error(500, "SCAN_FAILED", "The AURA engine failed to analyse this page.",
                           detail=sanitize_provider_error(e)[:300])
         audit_store.put(view, caller(request))

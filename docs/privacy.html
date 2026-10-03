@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AURA privacy policy</title>
+<meta name="description" content="What the AURA extension sends, where it goes, and how long it is kept.">
+<style>
+  :root {
+    --bg: #fbfbfd; --panel: #fff; --ink: #1c1b22; --muted: #5c5a68; --line: #e3e1ea;
+    --accent: #7c3aed; --accent-soft: #f4f0ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141318; --panel: #1c1b22; --ink: #ecebf2; --muted: #a7a4b4; --line: #2e2c38;
+      --accent: #a78bfa; --accent-soft: #231f33;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141318; --panel: #1c1b22; --ink: #ecebf2; --muted: #a7a4b4; --line: #2e2c38;
+    --accent: #a78bfa; --accent-soft: #231f33;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 16px 96px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 32px; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .date { color: var(--muted); font-size: 14px; margin: 0; }
+  h2 { font-size: 20px; margin: 40px 0 10px; letter-spacing: -0.01em; }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+  p, li { color: var(--ink); }
+  .lede { color: var(--muted); }
+  a { color: var(--accent); }
+  ul { padding-left: 20px; }
+  li { margin: 6px 0; }
+  code {
+    background: var(--accent-soft); border-radius: 4px; padding: 1px 5px;
+    font: 13.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; background: var(--panel); }
+  th, td { text-align: left; padding: 11px 14px; border: 1px solid var(--line); vertical-align: top; font-size: 15px; }
+  th { width: 34%; font-weight: 600; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 2px 20px 18px; }
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  @media (max-width: 560px) { th, td { display: block; width: auto; } th { border-bottom: 0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>AURA privacy policy</h1>
+  <p class="date">Last updated: 3 October 2026</p>
+</header>
+
+<p class="lede">AURA is a Chrome side-panel extension that checks the page you are on for UI, UX,
+accessibility and runtime problems. This policy says exactly what leaves your browser, where it goes, and
+how long it is kept. It describes the published extension and the AURA service it talks to by default.</p>
+
+<p>Nothing is collected until you press <strong>Scan current page</strong>. AURA does not watch pages in the
+background: it has no content scripts, and it can only read a tab after you click its toolbar icon on that
+tab.</p>
+
+<h2>The short version</h2>
+<div class="card">
+<table>
+  <tr><th>Your AI provider API key</th><td>Stays in this extension. Sent only to the provider you chose. The AURA service never receives it.</td></tr>
+  <tr><th>Screenshots</th><td>Stay in this browser. One is sent by your browser to your AI provider; none is ever uploaded to the AURA service or stored anywhere.</td></tr>
+  <tr><th>The page's structure and address</th><td>Sent to the AURA service for the scan, kept in memory for that scan, never written to disk.</td></tr>
+  <tr><th>Anything else about you</th><td>Not collected. No account, no sign-in, no analytics, no advertising, no tracking.</td></tr>
+</table>
+</div>
+
+<h2>What a scan sends to the AURA service</h2>
+<p>When you scan a page, the extension collects evidence from that one tab and sends it to the AURA
+service, which checks every claim against that evidence and returns the findings. That evidence is:</p>
+<ul>
+  <li><strong>The page's address</strong>, with the query string and fragment removed —
+    <code>https://shop.example/cart</code>, not <code>https://shop.example/cart?session=abc#item-3</code>.
+    The same stripping is applied to every other address in the evidence (links, failed requests, error
+    locations).</li>
+  <li><strong>The page's title</strong>, shortened to 200 characters, with anything that looks like a token
+    or key removed.</li>
+  <li><strong>The structure of the page</strong>: element tags, roles, ids, classes, CSS selectors,
+    positions and sizes, and computed styles — up to 3,000 elements. Text inside those elements is
+    included, shortened to 300 characters each, because a finding has to be able to name the button it is
+    about.</li>
+  <li><strong>Accessibility results</strong> from axe-core, which runs inside the page: rule identifiers,
+    severities, and the selectors of the elements that failed. No HTML is sent.</li>
+  <li><strong>Errors the page raised while the scan was running</strong>, and resource loads that failed,
+    taken from the browser's own Resource Timing data.</li>
+  <li><strong>The size of the browser window</strong> and the pixel size of the screenshot — the size only,
+    not the image.</li>
+  <li><strong>What was clicked</strong>, if you turned on the optional safe interaction test. AURA clicks at
+    most five harmless controls. It never types, submits a form, navigates, or presses anything
+    destructive.</li>
+</ul>
+
+<h3>What a scan never collects</h3>
+<p>Cookies. Local storage or session storage. Passwords, card numbers or anything else typed into a field —
+the extractor leaves form field values out entirely. Your browsing history. Any other tab. Anything from a
+page you did not scan.</p>
+
+<h2>What your browser sends to your AI provider</h2>
+<p>If AI analysis is on and you have saved an API key, <strong>your browser</strong> calls the provider you
+chose — Groq, OpenAI, Google (Gemini) or Anthropic — directly. The AURA service does not make that call and
+does not have your key.</p>
+<p>That request contains:</p>
+<ul>
+  <li>the evidence summary AURA prepared, which includes the page's stripped address, its title, the
+    elements under consideration and the deterministic findings;</li>
+  <li><strong>one screenshot of the visible part of the page</strong>, if the model you chose can accept
+    images. A screenshot shows whatever was on screen at that moment, which may include personal
+    information on the page. If you would rather not send one, choose a text-only model, or turn AI
+    analysis off and run a deterministic scan.</li>
+</ul>
+<p>What that provider then does with the request is governed by their own terms, not by this policy:
+<a href="https://groq.com/privacy-policy/">Groq</a>,
+<a href="https://openai.com/policies/privacy-policy">OpenAI</a>,
+<a href="https://ai.google.dev/gemini-api/terms">Google</a>,
+<a href="https://www.anthropic.com/legal/privacy">Anthropic</a>.</p>
+<p>With <strong>Mock AI · Demo</strong> selected, no AI request is made at all.</p>
+
+<h2>How long anything is kept</h2>
+<p>On the AURA service:</p>
+<ul>
+  <li><strong>Nothing is written to disk.</strong> No screenshots, no page content, no audit files.</li>
+  <li>A finished audit is held <strong>in memory</strong> so the panel can reopen it: at most 50 at a time,
+    each replaced by newer ones, and all of them gone when the service restarts.</li>
+  <li>Evidence prepared for a scan whose AI answer has not come back yet is held for at most
+    <strong>10 minutes</strong>, then discarded.</li>
+  <li>An audit belongs to the install that made it. Another install asking for it is told it does not
+    exist.</li>
+  <li>The service's logs contain no page address and no page title. An error is logged with the page it was
+    looking at removed.</li>
+</ul>
+<p>In your browser:</p>
+<ul>
+  <li>Your API key, your provider choice and the service address are in the extension's own storage until
+    you change or remove them.</li>
+  <li>The audit you are looking at, and the screenshot it crops, live in the side panel and are gone when
+    you close it.</li>
+</ul>
+
+<h2>What AURA never does</h2>
+<ul>
+  <li>It never sells or shares anything with anyone. There are no third parties beyond the AI provider you
+    chose yourself.</li>
+  <li>It has no account system, no sign-in, no identifiers that follow you. The token the extension uses is
+    issued to the install and says nothing about you.</li>
+  <li>It runs no remote code: everything the extension executes is in the package Chrome installed.</li>
+  <li>It does not use what you scan to train anything. AURA has no model of its own to train.</li>
+</ul>
+
+<h2>Running it entirely on your own machine</h2>
+<p>AURA's server is open and can be run locally. Point the backend at <code>http://127.0.0.1:8765</code> in
+the extension's settings and start it with <code>python -m aura.api</code>: the evidence then never leaves
+your computer, and the only thing that goes out is your browser's call to your AI provider — which you can
+also avoid by selecting Mock AI.</p>
+
+<h2>Children</h2>
+<p>AURA is a developer tool and is not directed at children.</p>
+
+<h2>Changes</h2>
+<p>Material changes to what AURA sends or keeps will be reflected here, with the date above updated, before
+the version that makes the change is published.</p>
+
+<h2>Contact</h2>
+<p>Questions about this policy, or a request about data: open an issue at
+<a href="https://github.com/sivapragasan26/AURA/issues">github.com/sivapragasan26/AURA/issues</a>.</p>
+
+<footer>AURA — UI/UX runtime assurance. This page is the policy referenced by the Chrome Web Store
+listing; the same text lives in <code>PRIVACY.md</code> in the repository.</footer>
+</div>
+</body>
+</html>

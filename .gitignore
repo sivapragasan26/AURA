@@ -53,3 +53,6 @@ scratch/
 
 # The hosted copy keeps its own virtualenv
 .venv/
+
+# Built extension packages (reproducible from source: python -m aura.tools.package_extension)
+dist/
