@@ -57,7 +57,7 @@ function pageUnavailable(action, e) {
   const reason = e instanceof ScanError && e.code === "OTHER_TAB"
     ? "Switch back to the tab that was scanned, then try again."
     : e instanceof ScanError && e.code === "RESTRICTED_PAGE"
-      ? "Chrome does not allow extensions on this page."
+      ? "This browser does not allow extensions on this page."
       : "AURA can no longer reach this page. It may have reloaded, moved to another site or closed. Click the AURA icon on the page and scan again.";
   return reason;
 }
@@ -215,9 +215,9 @@ function privacyLine(ai, backendUrl, local) {
 const ACCESS_UI = {
   PENDING: ["access-pending", "Checking access to this tab…"],
   ACTIVATED: ["access-ok", "AURA can scan this tab. Access lasts until the tab closes or moves to another site."],
-  NOT_ACTIVATED: ["access-needed", "Click the AURA icon in the Chrome toolbar while this tab is open to let AURA read this page. AURA has no access to any page until you do."],
+  NOT_ACTIVATED: ["access-needed", "Click the AURA icon in your browser's toolbar while this tab is open to let AURA read this page. AURA has no access to any page until you do."],
   ACCESS_LOST: ["access-needed", "Access to this tab ended (it moved to another site). Click the AURA icon in the toolbar again to re-activate it."],
-  RESTRICTED: ["access-blocked", "Chrome does not allow extensions on this page (browser pages, the Web Store, other extensions)."],
+  RESTRICTED: ["access-blocked", "This browser does not allow extensions on this page (browser pages, the extension store, other extensions)."],
   NO_TAB: ["access-blocked", "No active tab in this window."],
 };
 

@@ -13,7 +13,7 @@ Unlike platforms that blindly trust LLM design opinions, AURA treats AI output a
 
 ## 🧩 Chrome Extension (primary product, V0.5)
 
-AURA runs as a Chrome side panel that scans **the page you are on**, including localhost, staging and pages
+AURA runs as a side panel in Chrome and Microsoft Edge, scanning **the page you are on**, including localhost, staging and pages
 you are signed in to. You don't need to paste a URL. See [docs/architecture.md](docs/architecture.md).
 
 This branch is the **hosted** build: the extension talks to an AURA service rather than only to a server on
@@ -46,7 +46,8 @@ Extension end-to-end checks (the real, unmodified extension in Chromium, with re
 `python tests/extension_e2e.py`, `python tests/extension_activation_e2e.py`,
 `python tests/extension_highlight_e2e.py`, `python tests/extension_infinite_scroll_e2e.py`, and
 `python tests/extension_browser_ai_e2e.py` — the last one drives a whole scan with the AI call made in the
-browser, against a stand-in for the provider, so it costs no API credit.
+browser, against a stand-in for the provider, so it costs no API credit. `python tests/extension_edge_e2e.py`
+runs the same package in Microsoft Edge, and skips where Edge is not installed.
 
 `python tests/live_provider_check.py` is the one check that spends real tokens: it lets the extension
 call Groq, Gemini, OpenAI or Anthropic for real, with your own key, and reports which of them have

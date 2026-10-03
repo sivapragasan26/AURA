@@ -29,7 +29,7 @@ curl -s localhost:8765/api/health | head -c 200
 | `PORT` | injected by Render | Read automatically; `AURA_API_PORT` also works. |
 | `AURA_ALLOWED_HOSTS` | the service's own hostname | The Host check is the defence against a web page driving the API, so a public deployment must name its host rather than accept any. Without this every request is `403 HOST_NOT_ALLOWED`. |
 | `AURA_API_TOKEN` | a long random string, set in the dashboard | Signs the per-install tokens. Keep it out of the repository, and out of the logs: the server prints a token only when it is bound to loopback. **Check it took**: `curl https://<host>/api/health` reports `"token_from_environment": true`. If it is false, the server invented a token for this process, and every restart - every sleep, every redeploy - silently logs every install out. |
-| `AURA_ALLOWED_ORIGINS` | `chrome-extension://<the published id>` | Set it once the extension has a store id. Until then any extension origin is accepted, which is correct for development and too broad for production. |
+| `AURA_ALLOWED_ORIGINS` | `chrome-extension://<chrome-id>,chrome-extension://<edge-id>` | Set it once the extension has store ids. Until then any extension origin is accepted, which is correct for development and too broad for production. **Both stores**: Chrome and Edge assign different ids, and naming only one silently refuses every install from the other. Edge uses the same `chrome-extension://` scheme, verified by `tests/extension_edge_e2e.py`. |
 | `AI_PROVIDER` | `mock` | The server makes no AI call on the extension's path. This only decides what the demo provider reports. |
 
 ### One instance

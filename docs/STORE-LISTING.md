@@ -121,11 +121,48 @@ Two things that run taught us, both now handled:
 A provider that fails for a user does not break the scan: the deterministic findings still come back and
 the panel names the provider error.
 
+## Microsoft Edge Add-ons
+
+The same extension is published to Edge as well, from the **same zip**. Nothing is rebuilt and no code
+differs: Edge is Chromium, its extension pages are served from `chrome-extension://` like Chrome's, and
+`tests/extension_edge_e2e.py` runs the real package in the real Edge to keep that true.
+
+- **No registration fee** (Microsoft: "There is no registration fee for submitting extensions to the
+  Microsoft Edge program"), unlike Chrome's one-time $5.
+- Register at [Partner Center](https://partner.microsoft.com/dashboard/microsoftedge/public/login) with a
+  Microsoft account. Choose **Individual** - the verification is shorter than a company account's, and the
+  account type cannot be changed afterwards.
+- Reuse almost everything: `dist/aura-extension-<version>.zip`, the three 1280x800 screenshots and the
+  440x280 tile in `dist/listing/`, the same privacy policy URL, the same permission justifications.
+- **Two things Edge wants that Chrome does not**, both produced by `python -m aura.tools.listing_art`:
+  - an **extension logo**, 1:1 and 300x300 - required, and a submission cannot be completed without it
+    (`dist/listing/logo-300x300.png`)
+  - a description of **at least 250 characters** - the one in this file is long enough; the short
+    description and the name come from the manifest and are read-only in Partner Center
+- Screenshots must be 1280x800 or 640x480. Ours are 1280x800, so they transfer as they are.
+- Certification takes up to seven business days.
+- Edge assigns its **own extension id**, different from Chrome's. That is the one thing that has to reach
+  the backend - see below.
+
+## The one backend change, after publishing
+
+The service currently accepts any extension origin, which is right while nothing is published. Once the
+listings are live, set `AURA_ALLOWED_ORIGINS` on Render to **both** ids:
+
+```
+AURA_ALLOWED_ORIGINS = chrome-extension://<chrome-store-id>,chrome-extension://<edge-store-id>
+```
+
+Naming only the Chrome id silently breaks every Edge install: their requests come back
+`ORIGIN_NOT_ALLOWED` and nothing in the panel explains why. Remember that an environment change needs a
+blueprint sync or a dashboard edit to take effect, and that `curl https://<host>/api/providers` is how you
+tell - 401 means the service is reachable and the origin rules are not the thing refusing you.
+
 ## Before pressing submit
 
 1. `python -m aura.tools.package_extension` — builds the zip and refuses to build a broken one.
 2. Confirm the privacy policy URL opens in a private window.
-3. Confirm `aura-api-vs7e.onrender.com` (or whatever the service is finally called) matches
+3. Confirm the hosted service's name matches
    `extension/sidepanel/api.js`, `extension/manifest.json` and `render.yaml`. These three must agree, and
    `tests/test_hosted_deployment.py` checks that they do.
 4. $5 one-time developer registration fee, if the account is new.

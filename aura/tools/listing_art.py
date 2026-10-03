@@ -13,7 +13,8 @@ Writes to dist/listing/:
     screenshot-1-findings.png     the panel beside the scanned page, findings listed
     screenshot-2-finding.png      a finding opened, with its evidence
     screenshot-3-screenshot.png   the per-finding screenshot crop
-    promo-440x280.png             the small promotional tile
+    promo-440x280.png             the small promotional tile (both stores, optional)
+    logo-300x300.png              the extension logo Microsoft Edge requires (1:1, 300x300)
 
 The first three need Chrome and the Test Lab; the tile is drawn and needs neither.
 """
@@ -56,6 +57,29 @@ def _paste(page_png: bytes, panel_png: bytes) -> bytes:
     buf = io.BytesIO()
     canvas.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
+
+
+def store_logo(size: int = 300) -> bytes:
+    """
+    The square logo Microsoft Edge requires for a listing - 1:1, 300x300 recommended.
+
+    Chrome takes the 128px extension icon; Edge asks for its own, larger, and will not accept a
+    submission without one. It is the same mark the extension icon uses, drawn at 4x and resized, so the
+    two cannot drift into looking like different products.
+    """
+    from PIL import Image, ImageDraw
+
+    s = size * 4
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([0, 0, s - 1, s - 1], radius=int(s * 0.22), fill=(109, 40, 217, 255))
+    m, w = s * 0.2, max(4, int(s * 0.1))
+    d.ellipse([m, m, s - m, s - m], outline=(255, 255, 255, 255), width=w)
+    c, r = s / 2, s * 0.09
+    d.ellipse([c - r, c - r, c + r, c + r], fill=(255, 255, 255, 255))
+    out = io.BytesIO()
+    img.resize((size, size), Image.LANCZOS).convert("RGB").save(out, format="PNG", optimize=True)
+    return out.getvalue()
 
 
 def promo_tile() -> bytes:
@@ -206,6 +230,8 @@ def main(argv=None) -> int:
     print("Listing artwork")
     (OUT / "promo-440x280.png").write_bytes(promo_tile())
     print(f"  {(OUT / 'promo-440x280.png').relative_to(ROOT)}  440x280")
+    (OUT / "logo-300x300.png").write_bytes(store_logo())
+    print(f"  {(OUT / 'logo-300x300.png').relative_to(ROOT)}  300x300 (required by Edge)")
     if "--tile-only" in argv:
         return 0
     print("  scanning a Test Lab page with the real extension for the screenshots")

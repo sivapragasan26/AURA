@@ -41,7 +41,10 @@ TOKEN = "browser-ai-" + "x" * 28
 PORT = 8765
 BACKEND = f"http://127.0.0.1:{PORT}"
 EXT = str(ROOT / "extension")
-PAGE_PORT = 8795
+# The page server takes whatever port the OS gives it. A fixed port looks tidier until a previous run
+# is still holding it - SO_REUSEADDR then lets both bind, and which one answers is anyone's guess, so a
+# scan quietly fetches a stale page or hangs. An orphaned run cost three debugging sessions before this.
+PAGE_PORT = 0
 
 # A page with problems a model can plausibly report and the verifier can independently confirm.
 PAGE = """<!doctype html>
@@ -182,8 +185,9 @@ def serve_page():
         daemon_threads = True
 
     srv = S(("127.0.0.1", PAGE_PORT), H)
+    port = srv.server_address[1]
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    return f"http://127.0.0.1:{PAGE_PORT}/checkout.html"
+    return f"http://127.0.0.1:{port}/checkout.html"
 
 
 def start_api():

@@ -2,8 +2,8 @@
 
 Last updated: 3 October 2026
 
-AURA is a Chrome side-panel extension that checks the page you are on for UI, UX, accessibility and
-runtime problems. This policy says exactly what leaves your browser, where it goes, and how long it is
+AURA is a side-panel extension for Chrome and Microsoft Edge that checks the page you are on for UI,
+UX, accessibility and runtime problems. This policy says exactly what leaves your browser, where it goes, and how long it is
 kept. It describes the published extension and the AURA service it talks to by default.
 
 Nothing is collected until you press **Scan current page**. AURA does not watch pages in the background:
@@ -91,7 +91,7 @@ In your browser:
   chose yourself.
 - It has no account system, no sign-in, no identifiers that follow you. The token the extension uses is
   issued to the install and says nothing about you.
-- It runs no remote code: everything the extension executes is in the package Chrome installed.
+- It runs no remote code: everything the extension executes is in the package your browser installed.
 - It does not use what you scan to train anything. AURA has no model of its own to train.
 
 ## Optional: running it entirely on your own machine
