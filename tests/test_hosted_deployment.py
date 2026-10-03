@@ -310,3 +310,60 @@ def test_the_hosted_host_is_the_same_in_every_place_that_names_it():
         f"to its own hostname with HOST_NOT_ALLOWED")
     assert f"https://{host}/*" in manifest["host_permissions"], (
         f"the manifest does not permit https://{host}/*: the extension could not reach the service at all")
+
+
+def test_the_platform_can_health_check_the_service_it_is_running():
+    """
+    The first real deploy failed on exactly this.
+
+    Render probed GET /api/health from 10.228.25.132 - an address inside its own network, which no
+    AURA_ALLOWED_HOSTS value could name in advance - and the Host check answered 403 to every probe
+    until the deploy timed out and was rolled back. Health now answers whatever Host it is asked on.
+    Nothing else does.
+    """
+    from starlette.testclient import TestClient
+
+    from aura.api.server import create_app
+    from aura.api.store import AuditStore
+
+    token = "platform-probe-token"
+    client = TestClient(create_app(token=token, store=AuditStore()))
+    probe = {"Host": "10.228.25.132:10000"}      # what the platform actually sent
+
+    assert client.get("/api/health", headers=probe).status_code == 200, (
+        "the platform cannot tell whether the service is alive, so the deploy fails")
+
+    # Every other route still refuses an unnamed Host, which is what the check is for.
+    authed = {**probe, "X-AURA-Token": token}
+    for method, path, body in (
+        ("post", "/api/audits/prepare", {"bundle": {}}),
+        ("post", "/api/audits", {"bundle": {}}),
+        ("get", "/api/providers", None),
+        ("post", "/api/register", {}),
+        ("get", "/api/audits/AURA-2026-000001", None),
+    ):
+        r = client.post(path, json=body, headers=authed) if method == "post" else client.get(path, headers=authed)
+        assert r.status_code == 403 and r.json()["error"]["code"] == "HOST_NOT_ALLOWED", (
+            f"{path} answered {r.status_code} to an unnamed Host; only health may do that")
+
+
+def test_a_web_page_still_cannot_reach_health():
+    """
+    The Host check was health's second line of defence; the Origin check is the first, and it is the one
+    that stops a page resolving a hostname to 127.0.0.1 and poking at a server on someone's machine.
+    """
+    from starlette.testclient import TestClient
+
+    from aura.api.server import create_app
+    from aura.api.store import AuditStore
+
+    client = TestClient(create_app(token="origin-token", store=AuditStore()))
+    page = {"Host": "127.0.0.1:8765", "Origin": "https://evil.example.com"}
+    r = client.get("/api/health", headers=page)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "ORIGIN_NOT_ALLOWED"
+
+    # And what the probe can read carries nothing worth stealing.
+    body = client.get("/api/health", headers={"Host": "10.1.2.3:10000"}).json()
+    assert body["paired"] is False
+    assert not [k for k in str(body).lower().split() if "key=" in k]
+    assert "token" not in str(body).lower()

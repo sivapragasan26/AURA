@@ -67,8 +67,16 @@ there, refuses to build if anything references something missing or loads remote
 
 In order, because each step rules out the failures that would confuse the next.
 
-1. **It answers at all.** `curl -s https://<host>/api/health` returns JSON with
-   `"status": "ok"`. A `403 HOST_NOT_ALLOWED` here means `AURA_ALLOWED_HOSTS` does not name this host.
+1. **It answers at all.** `curl -s https://<host>/api/health` returns JSON with `"status": "ok"`.
+
+   Health is the one route that answers whatever Host it is asked on. That is not an oversight: the
+   platform probes it from inside its own network to decide whether the service started, from an address
+   no `AURA_ALLOWED_HOSTS` value could name in advance. The first deploy of this service failed for
+   exactly that reason - `GET /api/health` from `10.228.25.132`, 403 every time, until the deploy timed
+   out and rolled back. The Origin check still applies to health, so a web page cannot reach it.
+
+   Every other route does enforce the Host check, so a `403 HOST_NOT_ALLOWED` from, say, `/api/providers`
+   means `AURA_ALLOWED_HOSTS` does not name this host.
 2. **It issues tokens.** `curl -s -X POST https://<host>/api/register -d '{}' -H 'Content-Type: application/json'`
    returns a token beginning `ai1.`.
 3. **It refuses a key.** `curl -s -X POST https://<host>/api/providers/select -H "X-AURA-Token: <token>"

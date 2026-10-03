@@ -107,7 +107,14 @@ def test_endpoints_require_token_and_reject_web_origins_and_foreign_hosts(client
     assert client.post("/api/audits", json={}).status_code == 401
     assert client.post("/api/audits", json={}, headers={"X-AURA-Token": "wrong"}).status_code == 401
     assert client.post("/api/audits", json={}, headers=auth({"Origin": "https://evil.example"})).status_code == 403
-    assert client.get("/api/health", headers={"Host": "evil.example"}).status_code == 403
+    assert client.post("/api/audits", json={}, headers=auth({"Host": "evil.example"})).status_code == 403
+
+    # Health is the one exemption, and it is deliberate: the platform running the service probes it from
+    # inside its own network, from an address no allow-list can name (Render's first deploy failed on
+    # exactly that). A web page still cannot reach it, because the Origin check comes first.
+    assert client.get("/api/health", headers={"Host": "evil.example"}).status_code == 200
+    assert client.get("/api/health", headers={"Host": "evil.example",
+                                              "Origin": "https://evil.example"}).status_code == 403
 
 
 def test_oversized_body_is_rejected(client):

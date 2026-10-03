@@ -135,8 +135,8 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         """The install that is asking, so an audit is only ever handed back to the install that made it."""
         return security.install_id(api_token, request.headers.get(security.TOKEN_HEADER))
 
-    def guard(request: Request, require_token: bool = True) -> Optional[JSONResponse]:
-        if not security.host_allowed(request.headers.get("host")):
+    def guard(request: Request, require_token: bool = True, require_host: bool = True) -> Optional[JSONResponse]:
+        if require_host and not security.host_allowed(request.headers.get("host")):
             return _error(403, "HOST_NOT_ALLOWED", "The AURA API only answers on the loopback interface.")
         if not security.origin_allowed(request.headers.get("origin"), allow_list):
             return _error(403, "ORIGIN_NOT_ALLOWED", "Requests from web pages are not accepted.")
@@ -175,7 +175,19 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
                              "engine_version": ENGINE_VERSION, "api_version": API_VERSION})
 
     async def health(request: Request) -> JSONResponse:
-        denied = guard(request, require_token=False)
+        """
+        Engine and provider status. No page data, no audit, no secret.
+
+        This is the one route that answers whatever Host it is asked on, because the platform that runs
+        it needs to know the service is alive and probes it from inside its own network - Render's first
+        deploy sent `GET /api/health` from 10.228.25.132 and every 403 from the Host check counted as a
+        failed start, until the deploy timed out. No hostname AURA could be told in advance covers that.
+        The Origin check still applies, so a web page cannot reach this any more than it could before:
+        that, not the Host check, is what stops a page resolving a name to 127.0.0.1 and poking at a
+        server on someone's machine. What is left to read here is a version string and whether a
+        provider is configured, which the public URL would answer to anyone in any case.
+        """
+        denied = guard(request, require_token=False, require_host=False)
         if denied:
             return denied
         provider_key, model = configured_provider()
