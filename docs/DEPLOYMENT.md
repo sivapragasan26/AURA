@@ -87,6 +87,43 @@ In order, because each step rules out the failures that would confuse the next.
 5. **Nothing was written.** On Render, open a shell on the instance and check that `runs/` is absent or
    empty.
 
+## What the first deployment taught us
+
+Recorded because the next person to deploy this will hit the same things.
+
+- **The health probe comes from inside the platform's network.** Render's first deploy sent
+  `GET /api/health` from `10.228.25.132`; the Host allow-list answered 403 to every probe for fifteen
+  minutes and the deploy timed out and rolled back. Health is now exempt from the Host check, and only
+  health.
+- **Render renames the service.** `aura-api` became `aura-api-vs7e.onrender.com`. Until the allow-list
+  named the real host, every route except health answered `HOST_NOT_ALLOWED` on the real URL. The
+  hostname now lives in `extension/sidepanel/api.js` alone; the manifest, the blueprint and the tests
+  follow it.
+- **A code push does not re-apply blueprint environment variables.** After changing
+  `AURA_ALLOWED_HOSTS` in `render.yaml`, use **Manual sync** on the blueprint, or set the value in the
+  service's Environment tab. Nothing in the dashboard looks different afterwards: the way to tell is
+  `curl https://<host>/api/providers` returning 401 rather than 403.
+- **The first request after a sleep can lose a scan.** A scan begun against a cold instance timed out
+  once with nothing in the step list; the same scan took 7 s on the retry a minute later. The panel now
+  waits 60 s for a hosted backend and says "Service waking", but a free instance will always make
+  someone's first scan slow.
+
+### Proved against the deployment
+
+| | Through `https://aura-api-vs7e.onrender.com` |
+|---|---|
+| Groq `qwen/qwen3.8-27b` | 8 findings, 3 the model's own and confirmed, 7.0 s |
+| Gemini `gemini-3.6-flash` | 6 findings, 1 the model's own and confirmed, 29.4 s |
+
+Both scans made the AI call in the browser: the service's log shows `prepare` and `complete`, and the
+provider request went straight from Chrome to `api.groq.com` / `generativelanguage.googleapis.com`.
+
+Reproduce either with:
+
+```bash
+python tests/live_provider_check.py --provider groq --backend https://aura-api-vs7e.onrender.com
+```
+
 ## Fallback: the service does not work out
 
 Because the extension speaks to either backend and the AI call is in the browser either way, retreating

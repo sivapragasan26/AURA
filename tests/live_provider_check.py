@@ -157,7 +157,7 @@ class Result:
         return self.key_check == "READY" and self.scan in ("AI_OK", "not run")
 
 
-def run_provider(h, panel, tab, provider, key, source, do_scan, override=None):
+def run_provider(h, panel, tab, provider, key, source, do_scan, override=None, backend=None):
     r = Result(provider)
     r.source = source
     if override:
@@ -166,7 +166,8 @@ def run_provider(h, panel, tab, provider, key, source, do_scan, override=None):
     caps = MODEL_CAPABILITIES.get(model, {})
 
     h.evaluate(panel.session, INSTRUMENT % {
-        "backend": json.dumps(e2e.BACKEND), "token": json.dumps(e2e.TOKEN),
+        "backend": json.dumps(backend or e2e.BACKEND),
+        "token": json.dumps("" if backend and "onrender" in backend else e2e.TOKEN),
         "provider": json.dumps(provider), "model": json.dumps(model),
         "keys": json.dumps({provider: key}),
     })
@@ -210,7 +211,7 @@ def run_provider(h, panel, tab, provider, key, source, do_scan, override=None):
     sent = h.evaluate(panel.session, "window.__sent")
     for call in sent:
         blob = json.dumps({"h": call.get("headers"), "b": call.get("body")})
-        if key in blob and e2e.BACKEND in call["url"]:
+        if key in blob and (backend or e2e.BACKEND) in call["url"]:
             r.leaked.append(call["url"])
     steps = panel.js("document.getElementById('steps').textContent")
     if key in steps:
@@ -229,6 +230,8 @@ def main():
     ap.add_argument("--provider", choices=ORDER, help="only this provider")
     ap.add_argument("--no-scan", action="store_true", help="key checks only; spends nothing")
     ap.add_argument("--model", help="try this model instead of the provider's default")
+    ap.add_argument("--backend", help="scan through this AURA backend instead of a local one, "
+                                      "e.g. https://aura-api-vs7e.onrender.com")
     args = ap.parse_args()
     wanted = [args.provider] if args.provider else ORDER
 
@@ -250,14 +253,21 @@ def main():
     if not args.no_scan:
         print(f"\n  {len(keys)} scan(s) will be made, one request each.")
 
+    backend = (args.backend or e2e.BACKEND).rstrip("/")
+    hosted = not backend.startswith("http://127.0.0.1") and not backend.startswith("http://localhost")
+    if hosted:
+        print("")
+        print("  scanning through the DEPLOYED backend at " + backend)
     url = e2e.serve_page()
-    api = e2e.start_api()
+    api = None if hosted else e2e.start_api()
     h = ChromeHarness(headless=True)
     results = []
     try:
         ext = h.load_extension(str(ROOT / "extension"))
         options = h.extension_page(ext)
-        h.evaluate(options, f"chrome.storage.local.set({{backendUrl: '{e2e.BACKEND}', token: '{e2e.TOKEN}'}})")
+        # A hosted backend issues this install its own token; only a local one is paired by hand.
+        h.evaluate(options, "chrome.storage.local.set(" + json.dumps(
+            {"backendUrl": backend, "token": "" if hosted else e2e.TOKEN}) + ")")
         tab = h.open_tab(url, new_window=True)
         h.click_toolbar_action(ext, tab)
         panel = SidePanel(h, ext)
@@ -274,7 +284,7 @@ def main():
             print("")
             print(f"--- {provider} / {args.model or DEFAULT_MODELS[provider]} ---", flush=True)
             try:
-                r = run_provider(h, panel, tab, provider, key, source, not args.no_scan, args.model)
+                r = run_provider(h, panel, tab, provider, key, source, not args.no_scan, args.model, backend)
             except Exception as e:
                 r = Result(provider)
                 r.key_check = "error"
@@ -286,7 +296,8 @@ def main():
                 print(f"    {r.detail[:200]}")
     finally:
         h.close()
-        api.should_exit = True
+        if api is not None:
+            api.should_exit = True
         time.sleep(0.4)
 
     print("\n" + "=" * 78)

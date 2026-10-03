@@ -141,8 +141,10 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         if not security.origin_allowed(request.headers.get("origin"), allow_list):
             return _error(403, "ORIGIN_NOT_ALLOWED", "Requests from web pages are not accepted.")
         if require_token and not security.accepted(api_token, request.headers.get(security.TOKEN_HEADER)):
-            return _error(401, "UNAUTHORIZED", "Missing or invalid pairing token. Paste the token printed by the AURA "
-                                               "server into the extension's settings.")
+            return _error(401, "UNAUTHORIZED",
+                          "Missing or invalid access token. An extension gets one by itself from "
+                          "/api/register; for a server you run yourself, paste the token it prints into "
+                          "the extension's settings.")
         return None
 
     async def read_json(request: Request) -> Tuple[Optional[Any], Optional[JSONResponse]]:
