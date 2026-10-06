@@ -1,0 +1,13 @@
+# The report's sources are tracked; everything that can be regenerated from them is not.
+build/node_modules/
+build/content.json
+build/page_numbers.json
+build/*.docx
+build/*.pdf
+AURA_Report_Manuscript.md
+APPENDIX1_CODE.txt
+AURA_figures.zip
+
+# The figures are drawn by make_figures.py, but they are also what the report embeds, so they are kept.
+# The repository root ignores every *.png; these are the exception.
+!figures/*.png
