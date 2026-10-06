@@ -133,9 +133,18 @@ function failureMessage(status, reply, label) {
 // that straight at the user wastes a scan that would have worked seconds later. A rejected key or an
 // unknown model will never succeed on a second attempt and must not be retried.
 function worthRetrying(error) {
+  if (tooLarge(error)) return false;     // decided separately: the retry has to send less, not the same
   if ([429, 500, 502, 503, 504].includes(error.status)) return true;
   if (error.status === 0) return true;   // the request never arrived
   return /high demand|overload|temporar|try again|unavailable/i.test(error.message || "");
+}
+
+// The provider refused this request for its size rather than for the rate it arrived at. Groq says so
+// with a 413 and names its input-tokens-per-minute limit - and tells you to "try again", which is why
+// this has to be decided before worthRetrying's wording test sees it.
+function tooLarge(error) {
+  if (error.status === 413) return true;
+  return /too large|reduce your message size|input tokens per minute|\bITPM\b/i.test(error.message || "");
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -190,16 +199,20 @@ async function attemptCall(spec, { model, apiKey, prompt, image, mime, jsonMode,
  * pretending the model found nothing.
  *
  * One retry, for conditions that pass on their own. `onRetry` is told about it so the panel can say so
- * rather than appearing to hang.
+ * rather than appearing to hang. When the provider refused the request for its size, the retry drops the
+ * screenshot instead of resending the same thing, and `onDropImage` is told so the panel can say that
+ * the analysis it got was made without the picture.
  */
 export async function callProvider({ provider, model, apiKey, prompt, image = null, mime = "image/png",
-                                     jsonMode = true, timeoutMs = 180000, onRetry = null }) {
+                                     jsonMode = true, timeoutMs = 180000, onRetry = null,
+                                     onDropImage = null }) {
   const spec = PROVIDERS[provider];
   if (!spec) throw new ProviderCallError(`AURA cannot call '${provider}' from the browser.`);
   if (!apiKey) throw new ProviderCallError(`No ${spec.label} API key. Add one in AURA's settings.`, { status: 401 });
 
   const started = Date.now();
   const args = { model, apiKey, prompt, image, mime, jsonMode, timeoutMs };
+  let droppedImage = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const got = await attemptCall(spec, args);
@@ -210,12 +223,24 @@ export async function callProvider({ provider, model, apiKey, prompt, image = nu
           actual_model: got.model,
           attempt_count: attempt,
           retry_count: attempt - 1,
+          image_dropped: droppedImage,
           elapsed_ms: Date.now() - started,
         },
       };
     } catch (e) {
       const last = attempt === 2;
-      if (last || !(e instanceof ProviderCallError) || !worthRetrying(e)) throw e;
+      if (last || !(e instanceof ProviderCallError)) throw e;
+      // Too large is not a condition that passes on its own: sending the same request again spends a
+      // second one against the same allowance for the same refusal. Send less instead - without the
+      // screenshot - and only when there is a screenshot to drop.
+      if (tooLarge(e)) {
+        if (!args.image) throw e;
+        args.image = null;
+        droppedImage = true;
+        if (onDropImage) onDropImage(e);
+        continue;
+      }
+      if (!worthRetrying(e)) throw e;
       // The provider's own Retry-After wins, within reason; otherwise a short wait.
       const wait = Math.min(Math.max((e.retryAfter || 0) * 1000, 2500), 15000);
       if (onRetry) onRetry(e, wait);

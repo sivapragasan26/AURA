@@ -149,8 +149,14 @@ export const api = {
   health: async () => request("/api/health", { timeoutMs: quickTimeout((await getSettings()).backendUrl) }),
   interactionPlan: (pageUrl, elements) => request("/api/interaction-plan", { method: "POST", body: { page_url: pageUrl, elements } }),
   // Two-phase scan: the server prepares the prompt, the browser calls the provider, the server verifies.
-  prepareAudit: (bundle, screenshotAttached) =>
-    request("/api/audits/prepare", { method: "POST", body: { bundle, screenshot_attached: !!screenshotAttached }, timeoutMs: 120000 }),
+  // `model` lets the service size the prompt for what that model accepts, and tell this browser how far
+  // to shrink its capture: a provider that meters its input refuses an ordinary page otherwise.
+  prepareAudit: (bundle, screenshotAttached, model) =>
+    request("/api/audits/prepare", {
+      method: "POST",
+      body: { bundle, screenshot_attached: !!screenshotAttached, model: model || "" },
+      timeoutMs: 120000,
+    }),
   completeAudit: (auditId, payload) =>
     request(`/api/audits/${encodeURIComponent(auditId)}/complete`, { method: "POST", body: payload, timeoutMs: 120000 }),
   // One request, analysed entirely on the server: a deterministic-only scan, or the built-in demo AI.

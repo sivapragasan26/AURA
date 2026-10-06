@@ -429,7 +429,12 @@ function renderBanner(view) {
   try { const u = new URL(view.page_url); host = u.host + u.pathname; } catch (_) { /* keep */ }
   const lines = [h("strong", {}, `${title} · ${view.findings.length} finding${view.findings.length === 1 ? "" : "s"}`),
                  h("p", {}, host)];
-  if (view.ai.state !== "AI_OK") lines.push(h("p", {}, view.ai.message));
+  if (view.ai.state !== "AI_OK") {
+    lines.push(h("p", {}, view.ai.message));
+    // "AI analysis unavailable" on its own leaves the person with nowhere to go. The provider said why
+    // it refused - a rejected key, a page too large for its limit - and that is the actionable part.
+    if (view.ai.reason) lines.push(h("p", { class: "fine" }, view.ai.reason));
+  }
   if (typeof state.stale === "string" && state.stale !== "navigated") lines.push(h("p", { class: "stale" }, state.stale));
   b.replaceChildren(...lines);
 }

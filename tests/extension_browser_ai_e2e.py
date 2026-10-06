@@ -253,7 +253,12 @@ TEST_KEY = "gsk_test_only_not_a_real_key_000"
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    threading.Timer(600, lambda: (print("FAIL global timeout", flush=True), os._exit(3))).start()
+    # A watchdog, not a stopwatch: it has to be cancelled, and it has to be a daemon. Left running it
+    # kept the process alive for the full ten minutes after the run had already passed, and then printed
+    # "FAIL global timeout" underneath the passing summary.
+    watchdog = threading.Timer(600, lambda: (print("FAIL global timeout", flush=True), os._exit(3)))
+    watchdog.daemon = True
+    watchdog.start()
     url = serve_page()
     runs_before = sorted(p.name for p in settings.RUNS_DIR.iterdir()) if settings.RUNS_DIR.exists() else []
     api = start_api()
@@ -412,6 +417,7 @@ def main():
     check(kept == runs_before, f"the server wrote nothing to disk during these scans "
                                f"({len(kept) - len(runs_before)} new in {runs})")
 
+    watchdog.cancel()
     failed = [m for ok, m in CHECKS if not ok]
     print(f"\n{len(CHECKS) - len(failed)}/{len(CHECKS)} checks passed")
     for m in failed:

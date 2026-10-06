@@ -19,7 +19,7 @@ import {
   pageScrollMetrics, pageScrollTo, pageHoldSticky, pageBoxesFor, pageMainContentBottom,
 } from "./page_functions.js";
 
-export const COLLECTOR_VERSION = "aura-extension/0.5.0";
+export const COLLECTOR_VERSION = "aura-extension/0.5.1";
 
 export class ScanError extends Error {
   constructor(message, code = "SCAN_FAILED") { super(message); this.code = code; }
@@ -168,6 +168,33 @@ async function captureFullPage(tabId, windowId, viewport, onNote) {
   return { base64: await blobToBase64(await out.convertToBlob({ type: "image/png" })), width: out.width, height: out.height };
 }
 
+// Re-encodes the capture to the size the chosen model will accept. Longest side to `max_dim`, as JPEG,
+// which is what takes a full-page screenshot from several thousand vision tokens to about a thousand.
+// A failure here is not fatal: the original is returned and the provider decides.
+async function shrinkCapture(image, directive) {
+  const original = { base64: image.base64, mime: "image/png", width: image.width, height: image.height };
+  try {
+    const max = Number(directive.max_dim) || 480;
+    const bmp = await createImageBitmap(await (await fetch(`data:image/png;base64,${image.base64}`)).blob());
+    const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext("2d");
+    // JPEG has no transparency; without a white ground, anything transparent turns black.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bmp, 0, 0, bmp.width, bmp.height, 0, 0, w, h);
+    bmp.close();
+    const type = directive.format === "image/jpeg" ? "image/jpeg" : "image/png";
+    const quality = (Number(directive.quality) || 55) / 100;
+    const blob = await canvas.convertToBlob({ type, quality });
+    return { base64: await blobToBase64(blob), mime: type, width: w, height: h };
+  } catch (_) {
+    return original;
+  }
+}
+
 async function blobToBase64(blob) {
   const buf = new Uint8Array(await blob.arrayBuffer());
   let bin = "";
@@ -212,9 +239,20 @@ async function analyse({ bundle, useAI, image, step }) {
   const attach = !!(image && apiKey && caps.image_input);
 
   step("Preparing the evidence for analysis", "running");
-  const prepared = await api.prepareAudit(bundle, attach);
+  const prepared = await api.prepareAudit(bundle, attach, choice.model);
   step("Preparing the evidence for analysis", "done",
     `${Math.round(prepared.prompt.length / 1024)} KB prompt · up to ${prepared.max_findings} findings`);
+
+  // A full-page capture is worth several thousand vision tokens, which is more than some free tiers
+  // allow for a whole request. When the service says this model needs a smaller one, shrink it here -
+  // the capture the panel keeps for its per-finding crops is left at full size.
+  let shot = attach ? { base64: image.base64, mime: "image/png" } : { base64: null, mime: "image/png" };
+  if (attach && prepared.image) {
+    shot = await shrinkCapture(image, prepared.image);
+    step("Preparing the evidence for analysis", "done",
+      `${Math.round(prepared.prompt.length / 1024)} KB prompt · up to ${prepared.max_findings} findings`
+      + ` · screenshot reduced to ${shot.width}×${shot.height} (${prepared.image.reason})`);
+  }
 
   const detail = attach ? `${label} · with the screenshot` : `${label} · text only`;
   step(`Asking ${label} (your key, straight from this browser)`, "running");
@@ -223,7 +261,11 @@ async function analyse({ bundle, useAI, image, step }) {
   try {
     answer = await callProvider({
       provider: choice.provider, model: choice.model, apiKey, prompt: prepared.prompt,
-      image: attach ? image.base64 : null, jsonMode: caps.json_mode !== false,
+      image: shot.base64, mime: shot.mime, jsonMode: caps.json_mode !== false,
+      // A provider that refuses the request for its size will refuse it again unchanged, so the one
+      // retry drops the screenshot. A text-only analysis is worth more than none.
+      onDropImage: () => step(`Asking ${label} (your key, straight from this browser)`, "running",
+                              "The request was too large with the screenshot. Trying again without it."),
       // A free model under load answers "try again shortly". Say so, rather than appearing to hang.
       onRetry: (err, wait) => step(`Asking ${label} (your key, straight from this browser)`, "running",
                                    `${err.message} Trying once more in ${Math.round(wait / 1000)}s.`),
@@ -231,8 +273,10 @@ async function analyse({ bundle, useAI, image, step }) {
     // The retry stays in the record: it explains a scan that took twice as long, and a provider that
     // needs retrying often is worth knowing about.
     const retried = answer.meta.retry_count ? ` · succeeded on retry ${answer.meta.retry_count + 1}` : "";
+    // Never say "with the screenshot" about an answer the model gave without seeing it.
+    const sent = answer.meta.image_dropped ? `${label} · text only, the screenshot was too large` : detail;
     step(`Asking ${label} (your key, straight from this browser)`, "done",
-      `${detail} · ${Math.round(answer.response.length / 1024)} KB answer${retried}`);
+      `${sent} · ${Math.round(answer.response.length / 1024)} KB answer${retried}`);
   } catch (e) {
     if (!(e instanceof ProviderCallError)) throw e;
     failure = { http_status: e.status, message: e.message, retry_after_seconds: e.retryAfter };

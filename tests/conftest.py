@@ -30,3 +30,19 @@ def no_real_provider_keys(monkeypatch):
     for alias in ("groq_api", "GROQ_API", "AI_API_KEY", "gemini_api", "openai_api", "anthropic_api"):
         monkeypatch.delenv(alias, raising=False)
     yield
+
+
+@pytest.fixture(autouse=True)
+def fresh_registration_limit():
+    """
+    Every test starts with the registration limit unspent.
+
+    The limiter counts new installs per client address for an hour, in module state. The test that
+    proves it works deliberately exhausts it for 127.0.0.1, and without this every later test that
+    registers an install got 429 - a failure in whichever file happens to sort after that one, with
+    nothing in it to suggest the cause.
+    """
+    from aura.api import server as api_server
+    api_server._REGISTRATIONS.clear()
+    yield
+    api_server._REGISTRATIONS.clear()

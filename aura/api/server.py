@@ -39,6 +39,7 @@ from starlette.routing import Route
 from aura import __version__ as ENGINE_VERSION
 from aura.agent.provider_status import run_preflight
 from aura.agent.providers import get_ai_provider
+from aura.agent.request_shaping import shaped_prompt
 from aura.agents.browser_agent import BrowserAgent
 from aura.agents.orchestrator import AURAOrchestrator, build_ai_prompt
 from aura.api import security
@@ -50,7 +51,7 @@ from aura.api.views import build_audit_view
 from aura.assistant.chat import ask as ask_aura
 from aura.assistant.explain import explain_finding
 from aura.browser.interaction_policy import InteractionPolicy
-from aura.config import settings
+from aura.config import models, settings
 from aura.evidence.bundle import EvidenceBundle
 from aura.security.credentials import sanitize_provider_error
 from aura.utils.logger import logger
@@ -290,16 +291,30 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         return JSONResponse({"plan": plan, "blocked": blocked[:50], "budget": budget,
                              "policy": "AURA live-session policy: clicks only; no typing, form submission or navigation."})
 
-    def _prepare(bundle: EvidenceBundle, screenshot_attached: bool, owner: str) -> Dict[str, Any]:
+    def _prepare(bundle: EvidenceBundle, screenshot_attached: bool, owner: str,
+                 model: str = "") -> Dict[str, Any]:
         audit_id = AURAOrchestrator.generate_audit_id()
         packet = build_ai_prompt(bundle, screenshot_attached=screenshot_attached)
+
+        # A provider that meters its input will refuse an ordinary page outright, so the prompt is cut
+        # to what the chosen model accepts and the browser is told how far to shrink its capture. An
+        # extension too old to say which model it will call gets the prompt whole, exactly as before.
+        shaping = models.shaping_for(model)
+        prompt = shaped_prompt(packet.to_prompt(), shaping)
+
+        # The stored prompt is the one the browser will send. The answer is interpreted against it, and
+        # keeping the unshaped version here would judge the model on a prompt it never saw.
         pending.put(audit_id, PendingScan(
-            bundle=bundle, prompt=packet.to_prompt(), max_findings=packet.max_findings,
+            bundle=bundle, prompt=prompt, max_findings=packet.max_findings,
             screenshot_attached=screenshot_attached, screenshot_captured=bool(bundle.capture_size),
             owner=owner,
         ))
-        return {"audit_id": audit_id, "prompt": packet.to_prompt(), "max_findings": packet.max_findings,
-                "expires_in": PENDING_TTL_SECONDS, "api_version": API_VERSION}
+        prepared = {"audit_id": audit_id, "prompt": prompt, "max_findings": packet.max_findings,
+                    "expires_in": PENDING_TTL_SECONDS, "api_version": API_VERSION}
+        if shaping:
+            prepared["image"] = {"max_dim": shaping["image_max_dim"], "quality": shaping["image_quality"],
+                                 "format": shaping["image_format"], "reason": shaping["reason"]}
+        return prepared
 
     async def prepare_audit(request: Request) -> JSONResponse:
         """
@@ -322,7 +337,8 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
             return _error(422, "INVALID_EVIDENCE", "Evidence bundle failed validation.", problems=problems)
         try:
             prepared = await run_in_threadpool(_prepare, bundle,
-                                               bool((data or {}).get("screenshot_attached")), caller(request))
+                                               bool((data or {}).get("screenshot_attached")), caller(request),
+                                               str((data or {}).get("model") or ""))
         except ValueError as e:
             return _error(400, "INVALID_EVIDENCE", sanitize_provider_error(e)[:300])
         except Exception as e:
@@ -334,9 +350,13 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
 
     def _complete(audit_id: str, scan: PendingScan, provider_key: str, model: str, response: Optional[str],
                   failure: Optional[Dict[str, Any]], vision: bool, reported: Dict[str, Any]) -> Dict[str, Any]:
+        # The browser said at prepare time that it would attach the capture. If the provider then refused
+        # the request for its size and the retry went without it, the record must say the model answered
+        # without seeing the page - not that a screenshot it never received was attached.
+        attached = scan.screenshot_attached and not bool(reported.get("image_dropped"))
         relay = BrowserRelayProvider(
             provider_key, model, raw_response=response, failure=failure, vision=vision,
-            screenshot_captured=scan.screenshot_captured, screenshot_attached=scan.screenshot_attached,
+            screenshot_captured=scan.screenshot_captured, screenshot_attached=attached,
             reported=reported)
         orchestrator = AURAOrchestrator(provider=relay)
         report = orchestrator.analyze_evidence(scan.bundle, skip_ai=False, audit_id=audit_id)

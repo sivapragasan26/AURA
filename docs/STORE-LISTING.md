@@ -144,19 +144,24 @@ differs: Edge is Chromium, its extension pages are served from `chrome-extension
 - Edge assigns its **own extension id**, different from Chrome's. That is the one thing that has to reach
   the backend - see below.
 
-## The one backend change, after publishing
+## No backend change is needed after publishing
 
-The service currently accepts any extension origin, which is right while nothing is published. Once the
-listings are live, set `AURA_ALLOWED_ORIGINS` on Render to **both** ids:
+The service accepts extension origins and refuses web pages, and that stays correct once the listings
+are live. **Do not set `AURA_ALLOWED_ORIGINS` to the new store id.** It replaces the default rather than
+adding to it, so naming one id refuses every other install - which is exactly what happened here: the
+published Edge extension kept working while the copy loaded from disk in Chrome came back
+`ORIGIN_NOT_ALLOWED`, with nothing in the panel explaining why.
+
+Set it only to deliberately restrict the service to particular installs, and then name every id,
+remembering that Chrome and Edge assign different ones and a copy loaded from disk has a third:
 
 ```
 AURA_ALLOWED_ORIGINS = chrome-extension://<chrome-store-id>,chrome-extension://<edge-store-id>
 ```
 
-Naming only the Chrome id silently breaks every Edge install: their requests come back
-`ORIGIN_NOT_ALLOWED` and nothing in the panel explains why. Remember that an environment change needs a
-blueprint sync or a dashboard edit to take effect, and that `curl https://<host>/api/providers` is how you
-tell - 401 means the service is reachable and the origin rules are not the thing refusing you.
+An environment change needs a blueprint sync or a dashboard edit to take effect, and
+`curl https://<host>/api/providers` is how you tell - 401 means the service is reachable and the origin
+rules are not the thing refusing you.
 
 ## Before pressing submit
 

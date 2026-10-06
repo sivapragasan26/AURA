@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AURA — UI/UX Runtime Assurance",
   "short_name": "AURA",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Scan the page you are on for UI, UX, accessibility and runtime problems. Evidence-verified findings and element highlighting.",
   "minimum_chrome_version": "116",
   "icons": {

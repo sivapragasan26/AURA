@@ -145,6 +145,15 @@ def allowed_origins() -> list:
 
 
 def origin_allowed(origin: Optional[str], allow_list: Iterable[str]) -> bool:
+    """
+    Whether a browser origin may call this service.
+
+    AURA_ALLOWED_ORIGINS *replaces* the default; it does not add to it. Setting it to one extension id
+    therefore locks out every other install, which is how a published extension can work while a copy
+    loaded from disk is refused with ORIGIN_NOT_ALLOWED. The default already does what that setting is
+    usually reached for - every extension origin accepted, every web page refused - so leave it unset
+    unless the service is meant to serve exactly one listed install.
+    """
     if not origin:
         return True  # non-browser client (curl, tests); still needs the token
     origin = origin.rstrip("/")

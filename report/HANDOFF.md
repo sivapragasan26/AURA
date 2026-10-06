@@ -15,8 +15,11 @@ so it cold-starts; the extension allows a 60 s wake). The extension went to the 
 Add-ons store — Edge rather than Chrome because Chrome's developer registration costs $5. The privacy
 policy is published at `https://sivapragasan26.github.io/AURA/privacy.html`.
 
-**One setting still outstanding:** once the Edge listing is live and its extension id is known, set
-`AURA_ALLOWED_ORIGINS = chrome-extension://<edge-id>` in the Render dashboard.
+**Correction to earlier advice:** an earlier version of this document said to set
+`AURA_ALLOWED_ORIGINS` to the Edge extension id once the listing was live. Do not. That variable
+replaces the default rather than adding to it, so naming one id refuses every other install - it took
+the Chrome copy offline with `ORIGIN_NOT_ALLOWED` until it was removed again. Leave it unset: the
+default already accepts extension origins and refuses web pages.
 
 **Not committed yet.** `git status` on `deploy/hosted` shows the three benchmark fixes (section 3) and
 the whole `report/` directory as uncommitted. The fixes change no API shape, but the browser end-to-end

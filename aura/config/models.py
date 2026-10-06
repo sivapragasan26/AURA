@@ -69,6 +69,35 @@ MODEL_CAPABILITIES = {
     "mock-assurance-v0.3": {"image_input": True, "json_mode": True, "max_images": 5, "reasoning": False},
 }
 
+# How large a request a model will actually accept, where the provider meters the input side.
+#
+# Groq's free tier allows 7,000 input tokens per minute, and one scan of an ordinary page can exceed
+# that on its own: a long page was measured at 7,016 tokens - 13 KB of evidence packet plus a twelve-
+# screen capture - and Groq refused the whole request, leaving the scan with no AI analysis at all. A
+# model absent from this table is sent the request unshaped, which is right for the providers whose
+# input allowance is far larger.
+#
+# The numbers are the ones the engine's own Groq client settled on: ~18 elements and 8,000 characters
+# of packet, and a 480px JPEG at quality 55, which takes a capture from 4,000-5,000 vision tokens to
+# roughly 1,000. The extension reads this from the prepared scan, because the screenshot never leaves
+# the browser and can only be resized there.
+REQUEST_SHAPING = {
+    "qwen/qwen3.8-27b": {
+        "reason": "Groq's free tier allows 7,000 input tokens per minute",
+        "max_dom_elements": 18,
+        "max_prompt_chars": 8000,
+        "image_max_dim": 480,
+        "image_quality": 55,
+        "image_format": "image/jpeg",
+    },
+}
+
+
+def shaping_for(model):
+    """The input shaping a model needs, or None when it accepts a full-sized request."""
+    return REQUEST_SHAPING.get(model or "")
+
+
 # The cheapest model per provider that can still be shown a screenshot, because the user pays for this.
 DEFAULT_MODELS = {
     "groq": "qwen/qwen3.8-27b",

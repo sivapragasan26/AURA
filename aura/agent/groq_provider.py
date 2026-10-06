@@ -21,6 +21,7 @@ from typing import Any, Dict, Optional, Tuple
 import requests
 
 from aura.agent.provider import AIProvider
+from aura.agent.request_shaping import compact_packet_prompt
 from aura.config import settings
 from aura.config.models import MODEL_CAPABILITIES
 from aura.security.credentials import sanitize_provider_error
@@ -146,32 +147,11 @@ def compact_prompt_for_groq(prompt: str, max_dom_elements: int = 20, max_chars: 
     """
     Compacts AURA prompt for Groq to stay safely under its 7,000 ITPM limit.
     Preserves instructions, schema, metadata, and the top N interactive DOM elements.
+
+    The work is done by aura.agent.request_shaping, because the hosted path needs the same shaping: the
+    browser makes the model call there, and a prompt compacted only here would never reach it.
     """
-    if not prompt:
-        return prompt
-    m = re.search(r"```json\s*(.*?)\s*```", prompt, re.DOTALL)
-    if not m:
-        if len(prompt) > max_chars:
-            return prompt[:max_chars] + "\n\nRespond with valid JSON."
-        return prompt
-    try:
-        data = json.loads(m.group(1))
-        if isinstance(data, dict):
-            dom = data.get("targeted_dom", [])
-            if len(dom) > max_dom_elements:
-                data["targeted_dom"] = dom[:max_dom_elements]
-            compact_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-            new_prompt = prompt[:m.start()] + "```json\n" + compact_json + "\n```" + prompt[m.end():]
-            if len(new_prompt) > max_chars:
-                data["targeted_dom"] = dom[:15]
-                compact_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-                new_prompt = prompt[:m.start()] + "```json\n" + compact_json + "\n```" + prompt[m.end():]
-            return new_prompt
-    except Exception as e:
-        logger.debug(f"[GroqProvider] Prompt JSON compaction skipped: {e}")
-    if len(prompt) > max_chars:
-        return prompt[:max_chars] + "\n\nRespond with valid JSON."
-    return prompt
+    return compact_packet_prompt(prompt, max_dom_elements=max_dom_elements, max_chars=max_chars)
 
 
 
