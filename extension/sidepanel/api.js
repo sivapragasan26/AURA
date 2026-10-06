@@ -165,5 +165,14 @@ export const api = {
   explain: (id, fid) => request(`/api/audits/${encodeURIComponent(id)}/findings/${encodeURIComponent(fid)}/explain`, { method: "POST", body: {} }),
   providers: () => request("/api/providers"),
   testProvider: () => request("/api/providers/test", { method: "POST", body: {}, timeoutMs: 45000 }),
+  // Ask AURA, in the same two halves as a scan and for the same reason: most questions are answered
+  // from the finding's own record and never reach a model, and the ones that do are asked by this
+  // browser with this browser's key. The service holds none.
+  askPrepare: (id, question, findingId) =>
+    request(`/api/audits/${encodeURIComponent(id)}/ask/prepare`,
+      { method: "POST", body: { question, finding_id: findingId || null } }),
+  askComplete: (id, payload) =>
+    request(`/api/audits/${encodeURIComponent(id)}/ask/complete`, { method: "POST", body: payload }),
+  // One request, with the model called on the server. For a server that holds its own provider key.
   ask: (id, question, findingId) => request(`/api/audits/${encodeURIComponent(id)}/ask`, { method: "POST", body: { question, finding_id: findingId || null } }),
 };

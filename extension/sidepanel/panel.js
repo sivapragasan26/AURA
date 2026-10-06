@@ -1,7 +1,7 @@
 // AURA side panel controller.
 // All text coming from pages or AI output is rendered with textContent (never innerHTML).
 import { api, ApiError, getAiChoice, setAiChoice, getProviderKey, setProviderKey, getSettings } from "./api.js";
-import { PROVIDERS, callsProviderInBrowser, checkProviderKey } from "./providers.js";
+import { PROVIDERS, callsProviderInBrowser, checkProviderKey, callProvider, ProviderCallError } from "./providers.js";
 import { cropFinding, NoShot } from "./shot.js";
 import { scanCurrentPage, getActiveTab, ensureAgent, ScanError } from "./scanner.js";
 import { agentHighlight, agentClearHighlight, clearPageOverlays } from "./page_functions.js";
@@ -928,6 +928,50 @@ async function doExplain() {
 
 
 // ------------------------------------------------------------------ Ask AURA
+//
+// The service answers most questions from the finding's own record, at no AI cost. When one does need
+// the model, the service sends back the prompt and this browser makes the call with this browser's
+// key - the same arrangement as a scan, and for the same reason: the service has no key of its own, so
+// before this existed Ask AURA could not work on the hosted deployment at all.
+async function askAura(auditId, question, findingId, onNote) {
+  const prepared = await api.askPrepare(auditId, question, findingId);
+  if (prepared.state !== "NEEDS_MODEL") return prepared;
+
+  const choice = await getAiChoice();
+  if (!callsProviderInBrowser(choice.provider)) {
+    // The same sentence the service gives for the same situation, so the two cannot drift apart.
+    return { state: "AI_UNAVAILABLE",
+             message: "Ask AURA requires a real AI provider. Select Groq, Gemini, OpenAI or Anthropic "
+                      + "under AI in the panel. Explain still works with Mock AI and costs no AI request." };
+  }
+  const apiKey = await getProviderKey(choice.provider);
+  const label = (PROVIDERS[choice.provider] || {}).label || choice.provider;
+  if (!apiKey) {
+    return { state: "AI_UNAVAILABLE",
+             message: `No ${label} API key. Add one under AI in the panel.` };
+  }
+
+  if (onNote) onNote(`Asking ${label}…`);
+  let answer = null;
+  let failure = null;
+  try {
+    answer = await callProvider({ provider: choice.provider, model: choice.model, apiKey,
+                                  prompt: prepared.prompt, image: null, jsonMode: true,
+                                  onRetry: (err, wait) => onNote
+                                    && onNote(`${err.message} Trying once more in ${Math.round(wait / 1000)}s.`) });
+  } catch (e) {
+    if (!(e instanceof ProviderCallError)) throw e;
+    failure = { http_status: e.status, message: e.message };
+  }
+  // The service checks the answer against the audit it holds, so a model cannot cite a finding that is
+  // not there - and a provider failure is reported as a failure, never as an empty answer.
+  return api.askComplete(auditId, {
+    question, finding_id: findingId || null,
+    provider: choice.provider, model: choice.model,
+    response: answer ? answer.response : null, failure,
+  });
+}
+
 async function doAsk(ev) {
   ev.preventDefault();
   const q = $("ask-input").value.trim();
@@ -943,7 +987,8 @@ async function doAsk(ev) {
   const askFindingId = state.selected ? state.selected.id : null;
   const currentKey = `${state.view ? state.view.audit_id : "audit"}:${askFindingId || "page"}`;
   try {
-    const r = await api.ask(state.view.audit_id, q, askFindingId);
+    const r = await askAura(state.view.audit_id, q, askFindingId,
+                            (note) => pending.replaceChildren(h("span", { class: "muted" }, note)));
     if (r.state === "OK") {
       const cites = r.cited_finding_ids.map((id) => {
         const f = state.view.findings.find((x) => x.id === id);

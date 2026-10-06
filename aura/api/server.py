@@ -48,7 +48,7 @@ from aura.api.relay import BrowserRelayProvider, PendingScan, PendingScans, PEND
 from aura.api import shots
 from aura.api.store import AuditStore
 from aura.api.views import build_audit_view
-from aura.assistant.chat import ask as ask_aura
+from aura.assistant.chat import ask as ask_aura, interpret_ask, prepare_ask
 from aura.assistant.explain import explain_finding
 from aura.browser.interaction_policy import InteractionPolicy
 from aura.config import models, settings
@@ -488,24 +488,66 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         with AI_LOCK:
             return ask_aura(make_provider(), view, question, finding_id)
 
-    async def ask(request: Request) -> JSONResponse:
+    async def _ask_request(request: Request):
+        """The checks every Ask AURA route shares. Returns (view, question, finding_id) or an error."""
         denied = guard(request)
         if denied:
-            return denied
+            return None, denied
         view = audit_store.get(request.path_params["audit_id"], caller(request))
         if view is None:
-            return _error(404, "NOT_FOUND", "Audit not found.")
+            return None, _error(404, "NOT_FOUND", "Audit not found.")
         data, err = await read_json(request)
         if err:
-            return err
+            return None, err
         question = str((data or {}).get("question") or "")
         finding_id = (data or {}).get("finding_id")
         finding_id = finding_id if isinstance(finding_id, str) and finding_id else None
         # The answer is scoped to the finding named in THIS request. A finding id that does not belong to
         # this audit is an error, never a silent fall back to some other finding's context.
         if finding_id and not any(f.get("id") == finding_id for f in view.get("findings") or []):
-            return _error(404, "FINDING_NOT_FOUND", "That finding is not part of this audit.")
+            return None, _error(404, "FINDING_NOT_FOUND", "That finding is not part of this audit.")
+        return (view, question, finding_id, data or {}), None
+
+    async def ask(request: Request) -> JSONResponse:
+        """One request, with the model called here. For a server that holds its own provider key."""
+        ok, err = await _ask_request(request)
+        if err:
+            return err
+        view, question, finding_id, _ = ok
         result = await run_in_threadpool(_ask, view, question, finding_id)
+        return JSONResponse(result)
+
+    async def ask_prepare(request: Request) -> JSONResponse:
+        """
+        First half of a question: either the answer from the record, or the prompt for the browser.
+
+        Most questions never reach a model - they are answered from the finding itself and cost no AI
+        request. The rest come back as NEEDS_MODEL, because on this deployment the key is in the
+        browser and the call has to be made there.
+        """
+        ok, err = await _ask_request(request)
+        if err:
+            return err
+        view, question, finding_id, _ = ok
+        return JSONResponse(await run_in_threadpool(prepare_ask, view, question, finding_id))
+
+    async def ask_complete(request: Request) -> JSONResponse:
+        """Second half: the model's answer, checked against what this audit actually contains."""
+        ok, err = await _ask_request(request)
+        if err:
+            return err
+        view, question, finding_id, data = ok
+        provider_key = str(data.get("provider") or "unknown").lower()
+        if provider_key not in PROVIDER_LABELS:
+            return _error(400, "UNKNOWN_PROVIDER", f"Unknown provider '{provider_key}'")
+        response = data.get("response")
+        failure = data.get("failure") if isinstance(data.get("failure"), dict) else None
+        if not isinstance(response, str) or not response.strip():
+            response = None
+        if response is None and failure is None:
+            return _error(400, "INVALID_REQUEST", "Send either the model's answer or the provider failure.")
+        result = await run_in_threadpool(interpret_ask, view, question, finding_id, response,
+                                         provider_key, str(data.get("model") or "")[:120], failure)
         return JSONResponse(result)
 
     routes = [
@@ -522,5 +564,7 @@ def create_app(token: Optional[str] = None, store: Optional[AuditStore] = None) 
         Route("/api/audits/{audit_id}/findings/{finding_id}/explain", explain, methods=["POST"]),
         Route("/api/audits/{audit_id}/findings/{finding_id}/screenshot", finding_shot, methods=["GET"]),
         Route("/api/audits/{audit_id}/ask", ask, methods=["POST"]),
+        Route("/api/audits/{audit_id}/ask/prepare", ask_prepare, methods=["POST"]),
+        Route("/api/audits/{audit_id}/ask/complete", ask_complete, methods=["POST"]),
     ]
     return Starlette(routes=routes)

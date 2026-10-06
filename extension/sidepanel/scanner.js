@@ -19,7 +19,7 @@ import {
   pageScrollMetrics, pageScrollTo, pageHoldSticky, pageBoxesFor, pageMainContentBottom,
 } from "./page_functions.js";
 
-export const COLLECTOR_VERSION = "aura-extension/0.5.1";
+export const COLLECTOR_VERSION = "aura-extension/0.5.2";
 
 export class ScanError extends Error {
   constructor(message, code = "SCAN_FAILED") { super(message); this.code = code; }

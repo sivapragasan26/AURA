@@ -396,28 +396,54 @@ def _parse_answer(raw: str, valid_ids: set) -> Optional[Dict[str, Any]]:
     return {"answer": data["answer"].strip()[:2000], "cited_finding_ids": cited, "evidence_gaps": gaps}
 
 
-def ask(provider: Any, view: Dict[str, Any], question: str, finding_id: Optional[str] = None) -> Dict[str, Any]:
+def _scope(view: Dict[str, Any], question: str, finding_id: Optional[str]):
     """
-    One grounded answer about the selected finding (or, with none selected, about the audit).
+    Resolves a question against this audit: what it is about, and what may be cited in reply.
 
-    The finding is taken from the request, never from previous state: there is no "last finding" anywhere in
-    this module. Standard questions are answered from recorded evidence (0 AI requests).
+    The finding is taken from the request, never from previous state: there is no "last finding"
+    anywhere in this module.
     """
     question = (question or "").strip()[:MAX_QUESTION_CHARS]
-    if not question:
-        return {"state": "INVALID_QUESTION", "answer": None, "message": "Ask a question about this audit."}
-
     findings = view.get("findings") or []
     valid_ids = {f["id"] for f in findings}
     if finding_id and finding_id not in valid_ids:
         finding_id = None
+    selected = next((f for f in findings if f["id"] == finding_id), None) if finding_id else None
+    return question, finding_id, selected, valid_ids
+
+
+def _build_prompt(view: Dict[str, Any], question: str, finding_id: Optional[str],
+                  selected: Optional[Dict[str, Any]], valid_ids: set):
+    """The prompt for this question, and the finding ids an answer to it is allowed to cite."""
+    if selected is not None:
+        ctx = build_finding_context(view, selected)
+        return ASK_FINDING_PROMPT.format(
+            not_in_finding=NOT_IN_THIS_FINDING, tone=_TONE, finding_id=finding_id,
+            page=json.dumps(ctx["page"], ensure_ascii=False),
+            finding=json.dumps(ctx["finding"], ensure_ascii=False), question=question), {finding_id}
+    ctx = build_chat_context(view, None)
+    return (ASK_AUDIT_PROMPT.format(tone=_TONE, context=json.dumps(ctx, ensure_ascii=False),
+                                    question=question), valid_ids)
+
+
+def prepare_ask(view: Dict[str, Any], question: str, finding_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    What answering this question needs: the answer itself, or the prompt for one model call.
+
+    Standard questions are answered here from the finding's own record and cost no AI request.
+    Anything else returns NEEDS_MODEL with the prompt, so the call can be made wherever the key is. On
+    the hosted deployment that is the user's browser: this server holds no provider credential, which
+    is why Ask AURA could not work there at all until it was split this way. The scan path has the same
+    split - see aura/api/relay.py.
+    """
+    question, finding_id, selected, valid_ids = _scope(view, question, finding_id)
+    if not question:
+        return {"state": "INVALID_QUESTION", "answer": None, "message": "Ask a question about this audit."}
 
     key = cache_key(view.get("audit_id"), finding_id, question)
     cached = cache_get(key)
     if cached is not None:
         return {**cached, "cached": True}
-
-    selected = next((f for f in findings if f["id"] == finding_id), None) if finding_id else None
 
     # 1. Standard questions are answered from this finding's own record.
     if selected is not None:
@@ -429,6 +455,57 @@ def ask(provider: Any, view: Dict[str, Any], question: str, finding_id: Optional
                 return direct
 
     # 2. Anything else needs the model, with a context holding only what may be discussed.
+    prompt, _ = _build_prompt(view, question, finding_id, selected, valid_ids)
+    return {"state": "NEEDS_MODEL", "prompt": prompt, "scoped_finding_id": finding_id,
+            "answered_from": "SINGLE_FINDING" if selected is not None else "WHOLE_AUDIT"}
+
+
+def interpret_ask(view: Dict[str, Any], question: str, finding_id: Optional[str],
+                  raw: Optional[str], provider_key: str, model: str,
+                  failure: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    The answer a model gave, checked against what this audit actually contains.
+
+    An answer may cite only findings from this audit, and when the question was about one finding, only
+    that finding; anything else it cites is dropped. The citable set is rebuilt here from the stored
+    audit rather than taken from the caller, so an answer cannot widen its own scope by asking to.
+    """
+    question, finding_id, selected, valid_ids = _scope(view, question, finding_id)
+    if not question:
+        return {"state": "INVALID_QUESTION", "answer": None, "message": "Ask a question about this audit."}
+
+    if failure or not (raw or "").strip():
+        stated = failure.get("message") if isinstance(failure, dict) else None
+        return {"state": "AI_UNAVAILABLE", "answer": None,
+                "message": (f"The AI provider request failed: {str(stated)[:300]}" if stated
+                            else "The AI provider returned no answer.")}
+
+    _, citable = _build_prompt(view, question, finding_id, selected, valid_ids)
+    parsed = _parse_answer(raw, citable)
+    if parsed is None:
+        return {"state": "AI_RESPONSE_INVALID", "answer": None, "message": "The AI response could not be used."}
+
+    result = {"state": "OK", **parsed, "provider": provider_key, "model": model,
+              "answered_from": "SINGLE_FINDING" if selected is not None else "WHOLE_AUDIT",
+              "scoped_finding_id": finding_id,
+              "note": ("AI-generated answer grounded in this finding's recorded evidence. 1 AI request used."
+                       if selected is not None else
+                       "AI-generated answer grounded in this audit's findings. 1 AI request used.")}
+    cache_put(cache_key(view.get("audit_id"), finding_id, question), result)
+    return result
+
+
+def ask(provider: Any, view: Dict[str, Any], question: str, finding_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    One grounded answer, with the model called from this process.
+
+    This is the path for a server that holds its own provider key. The hosted deployment does not, and
+    uses prepare_ask and interpret_ask around a call made in the browser.
+    """
+    prepared = prepare_ask(view, question, finding_id)
+    if prepared.get("state") != "NEEDS_MODEL":
+        return prepared
+
     provider_key = getattr(provider, "provider_key", "unknown")
     if provider_key in ("mock", "unknown"):
         return {"state": "AI_UNAVAILABLE", "answer": None,
@@ -440,35 +517,12 @@ def ask(provider: Any, view: Dict[str, Any], question: str, finding_id: Optional
         return {"state": "AI_UNAVAILABLE", "answer": None, "preflight_status": preflight.status,
                 "message": f"AI provider unavailable ({preflight.status}). No answer was generated."}
 
-    if selected is not None:
-        ctx = build_finding_context(view, selected)
-        prompt = ASK_FINDING_PROMPT.format(
-            not_in_finding=NOT_IN_THIS_FINDING, tone=_TONE, finding_id=finding_id,
-            page=json.dumps(ctx["page"], ensure_ascii=False),
-            finding=json.dumps(ctx["finding"], ensure_ascii=False), question=question)
-        citable = {finding_id}
-    else:
-        ctx = build_chat_context(view, None)
-        prompt = ASK_AUDIT_PROMPT.format(tone=_TONE, context=json.dumps(ctx, ensure_ascii=False), question=question)
-        citable = valid_ids
-
     model = getattr(provider, "model", "default")
     try:
-        raw = provider.analyze(prompt=prompt)
+        raw = provider.analyze(prompt=prepared["prompt"])
     except Exception as e:  # provider failure: report it, never answer from nothing
         ProviderStateStore.record(provider_key, model, getattr(provider, "last_execution_metadata", {}) or {})
         return {"state": "AI_UNAVAILABLE", "answer": None,
                 "message": f"The AI provider request failed: {sanitize_provider_error(e)[:300]}"}
     ProviderStateStore.record(provider_key, model, getattr(provider, "last_execution_metadata", {}) or {})
-    parsed = _parse_answer(raw, citable)
-    if parsed is None:
-        return {"state": "AI_RESPONSE_INVALID", "answer": None, "message": "The AI response could not be used."}
-
-    result = {"state": "OK", **parsed, "provider": provider_key, "model": model,
-              "answered_from": "SINGLE_FINDING" if selected is not None else "WHOLE_AUDIT",
-              "scoped_finding_id": finding_id,
-              "note": ("AI-generated answer grounded in this finding's recorded evidence. 1 AI request used."
-                       if selected is not None else
-                       "AI-generated answer grounded in this audit's findings. 1 AI request used.")}
-    cache_put(key, result)
-    return result
+    return interpret_ask(view, question, finding_id, raw, provider_key, model)

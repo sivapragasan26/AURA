@@ -108,6 +108,15 @@ RULE_CONTEXT = [
      "Text cut off mid-word leaves people guessing at the rest, and a button only half visible is easy "
      "to miss and awkward to hit.",
      "Room for content to grow, so nothing is sliced off by the box around it."),
+    ("overlap",
+     "Where two things are drawn in the same place, the words on top of each other are unreadable, and "
+     "a tap or a click reaches whichever one happens to be in front rather than the one aimed at.",
+     "Each item with room of its own, so nothing is printed over anything else and every control can "
+     "be hit on purpose."),
+    ("offscreen",
+     "A control sitting outside the visible area cannot be reached by someone who does not know to "
+     "scroll towards it, and on a phone there may be nowhere to scroll to.",
+     "Everything a reader needs to use placed inside the part of the page they can actually see."),
     ("keyboard",
      "Not everyone uses a mouse. Someone moving through the page with the Tab key can only reach what the "
      "page lets them reach, and can get stuck where it does not.",
@@ -124,10 +133,22 @@ RULE_CONTEXT = [
 
 
 def extra_context(rule: str, title: str, summary: str) -> Optional[tuple]:
-    """(what it is like, what good looks like) for this rule's family, or None when AURA has nothing to add."""
-    haystack = f"{rule} {title} {summary}".lower().replace("_", " ").replace("-", " ")
+    """
+    (what it is like, what good looks like) for this rule's family, or None when AURA has nothing to add.
+
+    The rule decides, and only if the rule matches nothing does the wording of the finding get a say.
+    Searching them together let a word in the title win: "Overlapping navigation links create an
+    unusable cluster" contains "link", so a finding about stacked elements was explained with advice
+    about link text and screen readers, which had nothing to do with it. Matching the rule first keeps
+    the fallback useful without letting it override what the finding actually is.
+    """
+    rule_text = (rule or "").lower().replace("_", " ").replace("-", " ")
     for token, experience, good in RULE_CONTEXT:
-        if token in haystack:
+        if token in rule_text:
+            return experience, good
+    wording = f"{title} {summary}".lower().replace("_", " ").replace("-", " ")
+    for token, experience, good in RULE_CONTEXT:
+        if token in wording:
             return experience, good
     return None
 

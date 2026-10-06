@@ -840,8 +840,33 @@ def determine_reproduction_and_trust(
         "inferred_judgement": "May affect how easily some visitors complete what they came to do.",
     }
 
-    # 1. Responsive & Layout Geometry
-    if cat in ("RESPONSIVENESS", "RESPONSIVE") or r in ("horizontal_overflow", "clipped_content", "viewport_horizontal_scroll", "offscreen_control"):
+    # 1. Items drawn on top of one another.
+    #
+    # Filed under RESPONSIVENESS, but nothing about it concerns the viewport. Falling through to the
+    # branch below described an overlap to the reader as content extending past the edge of the screen
+    # - a different problem, which the finding was not claiming and the evidence had not shown.
+    if r in ("overlapping-elements", "layout-overlap", "element-overlap"):
+        measured = v_status == "CONFIRMED"
+        reproduction["state"] = "REPRODUCED" if measured else "OBSERVED"
+        reproduction["action_attempted"] = "Compared this item's position and size against the ones around it."
+        reproduction["details"] = ("Overlap was reproduced by measuring the item's box against its neighbours."
+                                   if measured else
+                                   "Items appear to share the same space, observed during layout analysis.")
+        conclusion["known_fact"] = ("This item's box covers part of another item's box." if measured else
+                                    "The layout suggests this item shares space with another, but the overlap "
+                                    "was not measured on the claimed item.")
+        conclusion["inferred_judgement"] = ("Whatever sits underneath is hard to read, and a tap here may reach "
+                                            "the wrong one of the two.")
+        conclusion["strength"] = strength
+        return reproduction, conclusion
+
+    # 2. Responsive & Layout Geometry
+    #
+    # `r` has underscores replaced by hyphens a few lines above, so the rule names here were spelled in
+    # a form it can never hold and this half of the condition never fired. The category carried it, and
+    # every one of these rules is filed under RESPONSIVENESS, so nothing behaved differently - but a
+    # condition that cannot be true is a trap for the next person to extend it.
+    if cat in ("RESPONSIVENESS", "RESPONSIVE") or r in ("horizontal-overflow", "clipped-content", "viewport-horizontal-scroll", "offscreen-control"):
         if v_status == "CONFIRMED":
             reproduction["state"] = "REPRODUCED"
             reproduction["action_attempted"] = "Measured layout dimensions against the viewport bounds."
@@ -857,7 +882,7 @@ def determine_reproduction_and_trust(
         conclusion["strength"] = strength
         return reproduction, conclusion
 
-    # 2. Deterministic Accessibility
+    # 3. Deterministic Accessibility
     if "AXE" in src or cat == "ACCESSIBILITY":
         reproduction["state"] = "OBSERVED"
         reproduction["details"] = "Directly observed in the page document tree during automated inspection."
@@ -928,7 +953,7 @@ def determine_reproduction_and_trust(
         conclusion["strength"] = strength
         return reproduction, conclusion
 
-    # 3. Runtime & Console Errors
+    # 4. Runtime & Console Errors
     if "RUNTIME" in src or "CONSOLE" in src or "NETWORK" in src or cat == "RUNTIME":
         reproduction["state"] = "OBSERVED"
         reproduction["action_attempted"] = "Recorded the browser console, page errors and network activity during the scan."
@@ -938,7 +963,7 @@ def determine_reproduction_and_trust(
         conclusion["strength"] = strength
         return reproduction, conclusion
 
-    # 4. Controlled Interactions
+    # 5. Controlled Interactions
     if cat == "INTERACTION":
         is_sensitive = any(w in sel_low for w in ("submit", "form", "pay", "checkout", "buy", "delete", "destroy", "remove", "login", "password"))
         if is_sensitive:
@@ -963,7 +988,7 @@ def determine_reproduction_and_trust(
         conclusion["strength"] = strength
         return reproduction, conclusion
 
-    # 5. AI / Visual / UX Findings
+    # 6. AI / Visual / UX Findings
     if is_ai or src in ("AI", "GEMINI", "GROQ", "OPENAI", "ANTHROPIC"):
         if has_visual_evidence:
             reproduction["state"] = "SUPPORTED"
@@ -1435,11 +1460,20 @@ def interpret_finding(finding: Any) -> Dict[str, Any]:
     )
 
     # Status & Confidence
+    #
+    # Two different numbers, and they must not be confused. `raw_conf` is what the model said about its
+    # own claim; it belongs in the technical block, labelled as the model's, and it is passed on below
+    # for exactly that.
+    #
+    # The label the reader sees is AURA's own confidence, after verification. A claim the model rated
+    # 0.95 that the evidence could only support at 0.45 was being shown as "High confidence" beside a
+    # verdict of "Advisory", which says the opposite thing - and an uncalibrated self-assessment
+    # presented as a confidence is the practice this project exists to replace.
     human_status = map_human_status(v_status, is_ai_hypothesis=is_ai)
     raw_conf = _get_val(finding, "confidence")
     if is_ai and _get_val(finding, "ai_confidence") is not None:
         raw_conf = _get_val(finding, "ai_confidence")
-    confidence_label = map_confidence_label(raw_conf)
+    confidence_label = map_confidence_label(_get_val(finding, "confidence"))
 
 
     # Evidence provenance tracking
