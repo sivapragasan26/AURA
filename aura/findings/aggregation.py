@@ -241,6 +241,62 @@ class FindingsAggregator:
             evidence_ids=v.evidence_ids
         )
 
+    @staticmethod
+    def convert_interaction_outcomes(interaction_log: Optional[List[Dict[str, Any]]]) -> List[AURAFinding]:
+        """
+        A control AURA operated that produced no effect at all, reported as a finding in its own right.
+
+        This is measured, not inferred: AURA clicked the control, recorded the page state before and
+        after, and nothing changed - no DOM change, no address change, no error. Until now that evidence
+        was only offered to the AI, which in practice reported visual problems instead and left measured
+        interaction failures unmentioned; on the navigation benchmark suite every seeded dead control was
+        missed with the diagnosis "AI produced no candidate", while the proof of each one sat unused in
+        the interaction log.
+
+        It is reported as LIKELY rather than CONFIRMED on purpose. A click can legitimately do something
+        AURA cannot observe - copy to the clipboard, fire analytics, alter state off-screen - so this is
+        strong evidence of a dead control, not proof of one, and it is presented to the reader as such.
+        """
+        findings: List[AURAFinding] = []
+        for idx, entry in enumerate((interaction_log or []), start=1):
+            if entry.get("status") != "executed" or entry.get("action") != "click":
+                continue
+            if entry.get("errors_after_action"):
+                continue   # already reported as an interaction_failure by the runtime path
+            if any(entry.get(k) for k in ("dom_changed", "url_changed", "visible_change")):
+                continue
+            selector = entry.get("element_selector") or entry.get("target") or "unknown"
+            label = (entry.get("target_text") or "").strip()
+            name = f"'{label}'" if label else selector
+            findings.append(AURAFinding(
+                id=f"AURA-INTERACT-{idx:03d}",
+                source=FindingSource.RUNTIME,
+                category=FindingCategory.INTERACTION,
+                severity=FindingSeverity.MEDIUM,
+                title=f"Clicking {name} produced no visible response",
+                description=(f"AURA clicked {name} and compared the page before and after. Nothing changed: "
+                             f"no content, no address change and no error."),
+                observation=("Controlled interaction recorded no change to the page state after the click, "
+                             "and no error was raised."),
+                confidence=0.75,
+                verification_status=FindingVerificationStatus.LIKELY,
+                evidence=FindingEvidence(
+                    types=["INTERACTION"],
+                    description="Before and after page state captured around a controlled click",
+                    sources=["AURA controlled interaction"],
+                    flags={"screenshot": False, "dom": True, "accessibility": False, "runtime": True},
+                ),
+                affected_element=AffectedElement(selector=selector),
+                recommendation=("Confirm the control is meant to do something here. If it is, fix the handler; "
+                                "if its effect is invisible, give the user feedback that it worked."),
+                why_it_matters=("A control that appears interactive but does nothing leaves the person repeating "
+                                "the action and assuming the page is broken."),
+                raw_rule="non_responsive_control",
+                verification_score=0.75,
+                ai_confidence=0.0,
+            ))
+        return findings
+
     @classmethod
     def aggregate(
         cls,
@@ -248,7 +304,8 @@ class FindingsAggregator:
         rejected_ai_findings: List[VerifiedFinding],
         accessibility_violations: List[AccessibilityViolation],
         telemetry: RuntimeTelemetry,
-        ai_status: Optional[str] = None
+        ai_status: Optional[str] = None,
+        interaction_log: Optional[List[Dict[str, Any]]] = None
     ) -> AggregationResult:
         """
         Unified Single Source of Truth aggregation.
@@ -264,6 +321,10 @@ class FindingsAggregator:
         # 2. Convert runtime error events
         runtime_findings = cls.convert_runtime_events(telemetry)
         active_findings.extend(runtime_findings)
+
+        # 2b. Controls that were operated and did nothing
+        interaction_findings = cls.convert_interaction_outcomes(interaction_log)
+        active_findings.extend(interaction_findings)
 
         # 3. Convert verified AI findings
         ai_active_cnt = 0

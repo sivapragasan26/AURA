@@ -39,7 +39,33 @@ class BrowserAgent:
         return self.dom_analyzer.analyze(page)
 
     # Visible-content signature: innerText excludes display:none content, so revealing/hiding UI changes it
-    STATE_SIGNATURE_SCRIPT = "() => document.body ? (document.body.innerText.length + ':' + document.body.innerText.slice(0, 2000)) : ''"
+    # Did the page respond to that? Visible text alone cannot answer it: a dropdown that toggles a class,
+    # a panel that gains aria-expanded, a control that becomes disabled - all leave the text identical, so
+    # a working control was recorded exactly like a dead one, and the evidence of a dead control carried no
+    # information. The signature therefore also covers element count, the attributes that carry interface
+    # state, and the address. Focus is deliberately excluded: clicking anything moves focus, so including
+    # it would make every control look responsive, which is the same failure in the other direction.
+    STATE_SIGNATURE_SCRIPT = """
+    () => {
+        if (!document.body) return '';
+        const text = document.body.innerText || '';
+        const stateful = document.querySelectorAll(
+            '[aria-expanded],[aria-hidden],[aria-selected],[aria-checked],[open],[disabled],[hidden],' +
+            '.active,.open,.show,.selected,.expanded,.visible,.hidden,.disabled');
+        let state = '';
+        let seen = 0;
+        for (const el of stateful) {
+            if (seen++ > 200) break;
+            state += (el.id || el.tagName) + '='
+                  + (el.getAttribute('aria-expanded') || '') + (el.getAttribute('aria-hidden') || '')
+                  + (el.getAttribute('aria-selected') || '') + (el.getAttribute('aria-checked') || '')
+                  + (el.hasAttribute('open') ? 'o' : '') + (el.hasAttribute('hidden') ? 'h' : '')
+                  + (el.disabled ? 'd' : '') + '|' + String(el.className || '').slice(0, 60) + ';';
+        }
+        return [text.length, document.querySelectorAll('*').length, location.href,
+                state.slice(0, 1500), text.slice(0, 1500)].join('~');
+    }
+    """
     ELEMENT_INFO_SCRIPT = """
     (el) => {
         const ids = []; for (let p = el; p && p.nodeType === 1; p = p.parentElement) { if (p.id) ids.push(p.id); }

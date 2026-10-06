@@ -503,7 +503,8 @@ class AURAOrchestrator:
             provider_name=provider_name,
             is_mock_mode=is_mock_mode,
             credential_source=self.credential_source,
-            ai_status=diagnostics.status.value if diagnostics else None
+            ai_status=diagnostics.status.value if diagnostics else None,
+            interaction_log=interaction_log
         )
 
         duration_s = round(time.time() - start_time, 2)

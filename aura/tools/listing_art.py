@@ -14,6 +14,7 @@ Writes to dist/listing/:
     screenshot-2-finding.png      a finding opened, with its evidence
     screenshot-3-screenshot.png   the per-finding screenshot crop
     promo-440x280.png             the small promotional tile (both stores, optional)
+    promo-1400x560.png            the large promotional tile Edge offers (optional)
     logo-300x300.png              the extension logo Microsoft Edge requires (1:1, 300x300)
 
 The first three need Chrome and the Test Lab; the tile is drawn and needs neither.
@@ -80,6 +81,57 @@ def store_logo(size: int = 300) -> bytes:
     out = io.BytesIO()
     img.resize((size, size), Image.LANCZOS).convert("RGB").save(out, format="PNG", optimize=True)
     return out.getvalue()
+
+
+def _font(size, bold=False):
+    from PIL import ImageFont
+    for name in (("seguisb.ttf", "segoeuib.ttf") if bold else ("segoeui.ttf",)):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    try:
+        return ImageFont.truetype("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", size)
+    except OSError:
+        return ImageFont.load_default()
+
+
+def _mark(d, cx, cy, r, width_ratio=0.34):
+    """The AURA mark: a ring with a dot, the same shape as the extension icon."""
+    w = max(3, int(r * width_ratio))
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=VIOLET, width=w)
+    inner = r * 0.3
+    d.ellipse([cx - inner, cy - inner, cx + inner, cy + inner], fill=VIOLET)
+
+
+def large_tile() -> bytes:
+    """
+    The 1400x560 tile Edge shows for a featured placement.
+
+    Laid out for its own proportions rather than scaled up from the small one: at 2.5:1 there is room
+    for the claim that distinguishes AURA, which is that a finding has to survive being checked.
+    """
+    from PIL import Image, ImageDraw
+
+    w, h = 1400, 560
+    img = Image.new("RGB", (w, h), (252, 251, 254))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, w, 14], fill=VIOLET)
+
+    _mark(d, 230, 290, 118)
+
+    # The text block is centred on the same axis as the mark; left as drawn it sat 45px lower, which
+    # reads as a mistake at tile size.
+    d.text((420, 105), "AURA", font=_font(124, bold=True), fill=INK)
+    d.text((428, 251), "UI/UX runtime assurance", font=_font(44), fill=(92, 90, 104))
+    d.text((428, 327), "Scan the page you are on. Every finding is checked", font=_font(32), fill=INK)
+    d.text((428, 369), "against the evidence before you are shown it.", font=_font(32), fill=INK)
+    d.text((428, 429), "Free  -  accessibility, UI, UX and runtime  -  bring your own AI key",
+           font=_font(27), fill=VIOLET)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
 
 
 def promo_tile() -> bytes:
@@ -230,6 +282,8 @@ def main(argv=None) -> int:
     print("Listing artwork")
     (OUT / "promo-440x280.png").write_bytes(promo_tile())
     print(f"  {(OUT / 'promo-440x280.png').relative_to(ROOT)}  440x280")
+    (OUT / "promo-1400x560.png").write_bytes(large_tile())
+    print(f"  {(OUT / 'promo-1400x560.png').relative_to(ROOT)}  1400x560")
     (OUT / "logo-300x300.png").write_bytes(store_logo())
     print(f"  {(OUT / 'logo-300x300.png').relative_to(ROOT)}  300x300 (required by Edge)")
     if "--tile-only" in argv:

@@ -24,6 +24,17 @@ Before reporting a candidate, ask yourself:
 Only report what the evidence supports. Do not invent defects. Report at most {max_findings} candidates,
 fewer if fewer are well supported. Your output is CANDIDATES ONLY; AURA verifies them independently.
 
+INTERACTION EVIDENCE RULES:
+CRITICAL: a control AURA operated that did nothing IS a defect, and it is the one kind of defect you
+can state with certainty, because it was measured rather than inferred from appearance.
+- "interactions" is not context: it is a record of what AURA actually did to this page and what happened.
+  An entry whose outcome is "no visible effect: the page did not change in any way" is direct, measured
+  evidence of non_responsive_control or click_without_feedback on that control. An entry whose outcome is
+  "raised an error in the page" is direct evidence of interaction_failure. Report these.
+- Each entry names the control in "label". Use that name in your title so a reader knows what to press.
+- Do NOT report an interaction defect for a control that is absent from this list. AURA did not operate
+  it, so there is no evidence either way, and a guess here is indistinguishable from an invention.
+
 CRITICAL VISUAL GROUNDING RULES:
 - Visual UI/UX findings (bad_visual_hierarchy, weak_primary_cta, competing_cta, misleading_visual_emphasis,
   poor_spacing_consistency, poor_alignment, poor_grouping, typography_hierarchy_issue, discoverability_problem)

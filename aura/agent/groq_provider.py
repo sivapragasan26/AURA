@@ -54,6 +54,10 @@ def parse_groq_duration(value: Optional[str]) -> Optional[float]:
     return round(total, 3) if matched else None
 
 
+# Below this an answer cannot carry even one complete finding, so a retry would be pointless.
+MIN_OUTPUT_BUDGET = 512
+
+
 def parse_rate_limit_headers(headers: Any) -> Dict[str, Any]:
     """Provider-reported rate-limit values; only headers actually present are returned."""
     if not headers:
@@ -364,7 +368,12 @@ class GroqProvider(AIProvider):
                 category, retryable, scope = "REQUEST_TOO_LARGE", False, None
                 limit = parse_limit_value(error_msg)
                 current = payload.get("max_completion_tokens") or 0
-                if kind == "OTPM" and budget_reduced_to is None and limit and 1024 <= int(limit * 0.9) < current:
+                # The floor is what a model can still answer usefully within, not a round number. Groq's
+                # free tier states an OTPM limit of 1000, so the old floor of 1024 made this retry
+                # unreachable for exactly the accounts that hit the limit: the request was refused
+                # outright and the scan lost its AI analysis. A reduced budget may truncate a long
+                # answer, which the parser reports honestly; refusing to try guarantees nothing at all.
+                if kind == "OTPM" and budget_reduced_to is None and limit and MIN_OUTPUT_BUDGET <= int(limit * 0.9) < current:
                     budget_reduced_to = int(limit * 0.9)
                     payload["max_completion_tokens"] = budget_reduced_to
                     retryable, next_delay = True, 0.5

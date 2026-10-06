@@ -23,7 +23,8 @@ class ReportGenerator:
         provider_name: str = "Mock",
         is_mock_mode: bool = True,
         credential_source: str = "Mock Mode",
-        ai_status: Optional[str] = None
+        ai_status: Optional[str] = None,
+        interaction_log: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Assembles full V0.3 audit report data model and unified findings aggregation."""
 
@@ -32,7 +33,8 @@ class ReportGenerator:
             rejected_ai_findings=rejected_findings,
             accessibility_violations=accessibility_violations,
             telemetry=telemetry,
-            ai_status=ai_status
+            ai_status=ai_status,
+            interaction_log=interaction_log
         )
 
         base_report = AURAReport(

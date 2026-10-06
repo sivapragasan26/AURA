@@ -103,6 +103,41 @@ def test_oversized_output_budget_is_retried_once_with_a_smaller_budget():
     assert p.last_execution_metadata["output_budget_reduced_to"] == 1800
 
 
+def test_a_free_tier_output_limit_is_still_retried():
+    """
+    Groq's free tier states an OTPM limit of 1000. The reduced budget is then 900, and a floor of 1024
+    made this retry unreachable for exactly the accounts that hit the limit - the request was refused
+    outright and the scan lost its AI analysis entirely. Measured on the Test Lab benchmark: two of the
+    five suites returned no candidates at all because of it.
+    """
+    free_tier = ("Request too large for model `%s` in organization `org_x` service tier `on_demand` on "
+                 "output tokens per minute (OTPM): Limit 1000, Requested 1062. The request's expected "
+                 "output tokens exceed the enforced limit; reduce max_tokens and try again." % MODEL)
+    p = GroqProvider(api_key=KEY, model=MODEL, max_output_tokens=4096)
+    ok = {"choices": [{"message": {"content": "{\"candidates\": []}"}, "finish_reason": "stop"}], "model": MODEL,
+          "usage": {"total_tokens": 900}}
+    sent = []
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        sent.append(json["max_completion_tokens"])
+        return FakeResp(429, err(free_tier)) if len(sent) == 1 else FakeResp(200, ok)
+
+    with patch("aura.agent.groq_provider.requests.post", side_effect=fake_post), patch("time.sleep"):
+        assert p.analyze("prompt") == "{\"candidates\": []}"
+    assert sent == [4096, 900], "a free-tier OTPM refusal must be retried under the stated limit"
+    assert p.last_execution_metadata["output_budget_reduced_to"] == 900
+
+
+def test_a_budget_below_what_an_answer_needs_is_not_attempted():
+    """Under MIN_OUTPUT_BUDGET an answer cannot carry even one finding, so retrying would only waste a request."""
+    tiny = ("Request too large on output tokens per minute (OTPM): Limit 100, Requested 4096.")
+    p = GroqProvider(api_key=KEY, model=MODEL, max_output_tokens=4096)
+    with patch("aura.agent.groq_provider.requests.post", return_value=FakeResp(429, err(tiny))) as post,             patch("time.sleep"):
+        with pytest.raises(RuntimeError):
+            p.analyze("prompt")
+    assert post.call_count == 1
+
+
 def test_oversized_output_budget_is_not_retried_twice():
     p = GroqProvider(api_key=KEY, model=MODEL, max_output_tokens=4096)
     with patch("aura.agent.groq_provider.requests.post", return_value=FakeResp(429, err(OTPM_TOO_LARGE))) as post, \

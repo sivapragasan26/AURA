@@ -220,12 +220,31 @@ def build_evidence_packet(
             continue
         ref = ref_by_selector.get(entry.get("target")) or ref_by_selector.get(entry.get("element_selector"))
         item = {"target": ref or "unlisted element", "action": entry.get("action"), "status": entry.get("status")}
+        # Name the control. A record that says only "E5" forces the model to cross-reference the DOM
+        # section to learn what was pressed, and a model that does not bother reports nothing.
+        known = ref_map.get(ref) if ref else None
+        if known and known.get("text"):
+            item["label"] = known["text"]
         for k in ("dom_changed", "url_changed", "visible_change"):
             if k in entry:
                 item[k] = entry[k]
         errors = entry.get("errors_after_action") or []
         if errors:
             item["errors_after_action"] = [_short(t, 140) for t in errors[:2]]
+        # State the outcome in words. "dom_changed: false" is the evidence of a dead control, but as a
+        # bare flag it reads as unremarkable - every record carried it, including the working ones, so a
+        # broken button and a working one looked identical. Measured on the Test Lab benchmark: four of
+        # the six seeded defects in the navigation suite were missed with the diagnosis "AI produced no
+        # candidate", on controls whose failure was sitting in this list unlabelled.
+        if entry.get("status") == "executed":
+            if errors:
+                item["outcome"] = "raised an error in the page"
+            elif not any(entry.get(k) for k in ("dom_changed", "url_changed", "visible_change")):
+                item["outcome"] = "no visible effect: the page did not change in any way"
+            else:
+                item["outcome"] = "the page responded"
+        if entry.get("hypothesis"):
+            item["was_testing"] = _short(entry["hypothesis"], 160)
         interactions.append(item)
     interactions = interactions[:MAX_INTERACTIONS]
     if blocked:
